@@ -2,6 +2,12 @@
 # roles/install_elastic/tasks/elasticsearch-ssl-multinode.yml
 # SSL Certificate setup for multi-node Elasticsearch deployment - FIXED
 
+# Define global facts for use across all tasks and rescue blocks
+- name: Define elasticsearch node facts
+  set_fact:
+    has_elasticsearch_nodes: "{{ elasticsearch_nodes is defined and elasticsearch_nodes | length > 0 }}"
+    primary_host: "{{ groups.get('physical_hosts', groups.get('all', [inventory_hostname]))[0] | default(inventory_hostname) }}"
+
 - name: Multi-Node SSL Certificate Setup
   block:
     - name: Install OpenSSL
@@ -28,17 +34,20 @@
         owner: "1000"
         group: "1000"
         mode: "0755"
-      loop: "{{ elasticsearch_nodes }}"
+      loop: "{{ elasticsearch_nodes | default([]) }}"
       loop_control:
         loop_var: node
-        label: "{{ node.name }}"
+        label: "{{ node.name | default('unknown') }}"
       when: 
         - elasticsearch_nodes is defined
         - elasticsearch_nodes | length > 0
+        - node.name is defined
 
-# STEP 1: Generate CA certificate on BDA node or first available host
+# STEP 1: Generate CA certificate on first physical host
 - name: Generate CA certificate
   block:
+
+
     - name: Check if CA certificate exists
       stat:
         path: "/usr/share/siem/elasticsearch/certs/ca/ca.crt"
@@ -68,31 +77,33 @@
       when: not ca_exists.stat.exists
 
   run_once: true
-  delegate_to: "{{ groups.get('physical_hosts', [inventory_hostname])[0] }}"
+  delegate_to: "{{ primary_host }}"
 
 # STEP 2: Generate certificates for all nodes across all hosts
 - name: Generate node certificates for all cluster nodes
   block:
+
+
     - name: Create comprehensive node list for certificate generation
       set_fact:
         all_nodes_for_certs: |
           {%- set nodes = [] -%}
-          {%- for host_name, host_vars in hostvars.items() -%}
-            {%- if host_vars.elasticsearch_nodes is defined and host_vars.elasticsearch_nodes | length > 0 -%}
-              {%- for node in host_vars.elasticsearch_nodes -%}
-                {%- if node is defined and node.name is defined -%}
+          {%- for host_name in groups.get('all', []) -%}
+            {%- if hostvars[host_name].elasticsearch_nodes is defined and hostvars[host_name].elasticsearch_nodes | length > 0 -%}
+              {%- for node in hostvars[host_name].elasticsearch_nodes -%}
+                {%- if node is defined and node is mapping and node.name is defined -%}
                   {%- set node_info = {
                     'name': node.name,
                     'host': host_name,
-                    'ip': host_vars.ansible_default_ipv4.address,
-                    'port_offset': node.port_offset | default(0)
+                    'ip': hostvars[host_name].get('ansible_default_ipv4', {}).get('address', '127.0.0.1'),
+                    'port_offset': node.get('port_offset', 0)
                   } -%}
                   {%- set _ = nodes.append(node_info) -%}
                 {%- endif -%}
               {%- endfor -%}
             {%- endif -%}
           {%- endfor -%}
-          {{ nodes }}
+          {{ nodes | reject('none') | list }}
 
     - name: Debug nodes list for certificate generation
       debug:
@@ -100,8 +111,11 @@
           📋 Nodes for Certificate Generation:
           Total nodes: {{ all_nodes_for_certs | length }}
           {% for node in all_nodes_for_certs %}
+          {% if node.name is defined %}
           - {{ node.name }} ({{ node.host }}: {{ node.ip }})
+          {% endif %}
           {% endfor %}
+      when: all_nodes_for_certs | length > 0
 
     - name: Create certificate directories for all cluster nodes
       file:
@@ -113,10 +127,12 @@
       loop: "{{ all_nodes_for_certs }}"
       loop_control:
         loop_var: node
-        label: "{{ node.name }}"
+        label: "{{ node.name | default('unknown') }}"
       when: 
         - all_nodes_for_certs is defined
         - all_nodes_for_certs | length > 0
+        - node is defined
+        - node.name is defined
 
     - name: Check existing node certificates
       stat:
@@ -126,10 +142,12 @@
       loop_control:
         loop_var: node
         index_var: node_idx
-        label: "{{ node.name }}"
+        label: "{{ node.name | default('unknown') }}"
       when: 
         - all_nodes_for_certs is defined
         - all_nodes_for_certs | length > 0
+        - node is defined
+        - node.name is defined
 
     - name: Generate private keys for all nodes
       command: openssl genrsa -out /usr/share/siem/elasticsearch/certs/{{ node.name }}/{{ node.name }}.key 2048
@@ -137,10 +155,12 @@
       loop_control:
         loop_var: node
         index_var: node_idx
-        label: "{{ node.name }}"
+        label: "{{ node.name | default('unknown') }}"
       when: 
         - all_nodes_for_certs is defined
         - all_nodes_for_certs | length > 0
+        - node is defined
+        - node.name is defined
         - node_certs_exist is defined
         - node_certs_exist.results is defined
         - node_idx < (node_certs_exist.results | length)
@@ -180,10 +200,12 @@
       loop_control:
         loop_var: node
         index_var: node_idx
-        label: "{{ node.name }}"
+        label: "{{ node.name | default('unknown') }}"
       when: 
         - all_nodes_for_certs is defined
         - all_nodes_for_certs | length > 0
+        - node is defined
+        - node.name is defined
         - node_certs_exist is defined
         - node_certs_exist.results is defined
         - node_idx < (node_certs_exist.results | length)
@@ -199,10 +221,12 @@
       loop_control:
         loop_var: node
         index_var: node_idx
-        label: "{{ node.name }}"
+        label: "{{ node.name | default('unknown') }}"
       when: 
         - all_nodes_for_certs is defined
         - all_nodes_for_certs | length > 0
+        - node is defined
+        - node.name is defined
         - node_certs_exist is defined
         - node_certs_exist.results is defined
         - node_idx < (node_certs_exist.results | length)
@@ -222,23 +246,24 @@
       loop_control:
         loop_var: node
         index_var: node_idx
-        label: "{{ node.name }}"
+        label: "{{ node.name | default('unknown') }}"
       when: 
         - all_nodes_for_certs is defined
         - all_nodes_for_certs | length > 0
+        - node is defined
+        - node.name is defined
         - node_certs_exist is defined
         - node_certs_exist.results is defined
         - node_idx < (node_certs_exist.results | length)
         - not node_certs_exist.results[node_idx].stat.exists
 
-    # FIXED: Set certificate permissions properly with better error handling
     - name: Set certificate file permissions for all nodes
       file:
         path: "/usr/share/siem/elasticsearch/certs/{{ cert_node.name }}/{{ cert_node.name }}.{{ file_ext }}"
         owner: "1000"
         group: "1000"
         mode: "{{ '0600' if file_ext == 'key' else '0644' }}"
-      loop: "{{ all_nodes_for_certs | product(['crt', 'key']) | list }}"
+      loop: "{{ all_nodes_for_certs | selectattr('name', 'defined') | list | product(['crt', 'key']) | list }}"
       loop_control:
         label: "{{ item[0].name }}/{{ item[0].name }}.{{ item[1] }}"
       vars:
@@ -247,12 +272,13 @@
       when: 
         - all_nodes_for_certs is defined
         - all_nodes_for_certs | length > 0
+        - item[0].name is defined
 
     - name: Clean up temporary certificate files
       file:
         path: "/usr/share/siem/elasticsearch/certs/{{ cert_node.name }}/{{ temp_file }}"
         state: absent
-      loop: "{{ all_nodes_for_certs | product(['csr', 'conf']) | list }}"
+      loop: "{{ all_nodes_for_certs | selectattr('name', 'defined') | list | product(['csr', 'conf']) | list }}"
       loop_control:
         label: "{{ item[0].name }}/{{ item[1] }}"
       vars:
@@ -261,16 +287,19 @@
       when: 
         - all_nodes_for_certs is defined
         - all_nodes_for_certs | length > 0
+        - item[0].name is defined
 
   run_once: true
-  delegate_to: "{{ groups.get('physical_hosts', [inventory_hostname])[0] }}"
+  delegate_to: "{{ primary_host }}"
   when: 
-    - hostvars[groups.get('physical_hosts', [inventory_hostname])[0]].elasticsearch_nodes is defined
-    - hostvars[groups.get('physical_hosts', [inventory_hostname])[0]].elasticsearch_nodes | length > 0
+    - has_elasticsearch_nodes
+    - hostvars[primary_host].get('elasticsearch_nodes', []) | length > 0
 
 # STEP 3: Distribute certificates to other physical hosts
 - name: Distribute certificates to other hosts
   block:
+
+
     - name: Synchronize certificate directory to other hosts
       synchronize:
         src: "/usr/share/siem/elasticsearch/certs/"
@@ -282,9 +311,9 @@
         rsync_opts:
           - "--chmod=D0755,F0644"
           - "--chown=1000:1000"
-      delegate_to: "{{ groups.get('physical_hosts', [inventory_hostname])[0] }}"
+      delegate_to: "{{ primary_host }}"
       when: 
-        - inventory_hostname != groups.get('physical_hosts', [inventory_hostname])[0]
+        - inventory_hostname != primary_host
         - elasticsearch_nodes is defined
         - elasticsearch_nodes | length > 0
 
@@ -294,45 +323,48 @@
         owner: "1000"
         group: "1000"
         mode: "0600"
-      loop: "{{ elasticsearch_nodes }}"
+      loop: "{{ elasticsearch_nodes | default([]) }}"
       loop_control:
         loop_var: node
-        label: "{{ node.name }}"
+        label: "{{ node.name | default('unknown') }}"
       when: 
         - elasticsearch_nodes is defined
         - elasticsearch_nodes | length > 0
-        - inventory_hostname != groups.get('physical_hosts', [inventory_hostname])[0]
+        - inventory_hostname != primary_host
+        - node.name is defined
 
 # STEP 4: Final verification
 - name: Final certificate verification
   block:
+
+
     - name: Verify node certificates exist
       stat:
         path: "/usr/share/siem/elasticsearch/certs/{{ node.name }}/{{ node.name }}.crt"
       register: final_cert_check
-      loop: "{{ elasticsearch_nodes }}"
+      loop: "{{ elasticsearch_nodes | default([]) }}"
       loop_control:
         loop_var: node
-        label: "{{ node.name }}"
+        label: "{{ node.name | default('unknown') }}"
       failed_when: not final_cert_check.stat.exists
       when: 
-        - elasticsearch_nodes is defined
-        - elasticsearch_nodes | length > 0
+        - has_elasticsearch_nodes
+        - node.name is defined
 
     - name: Test certificate chain for each node
       command: >
         openssl verify -CAfile /usr/share/siem/elasticsearch/certs/ca/ca.crt
         /usr/share/siem/elasticsearch/certs/{{ node.name }}/{{ node.name }}.crt
       register: verify_results
-      loop: "{{ elasticsearch_nodes }}"
+      loop: "{{ elasticsearch_nodes | default([]) }}"
       loop_control:
         loop_var: node
-        label: "{{ node.name }}"
+        label: "{{ node.name | default('unknown') }}"
       failed_when: verify_results.rc != 0
       changed_when: false
       when: 
-        - elasticsearch_nodes is defined
-        - elasticsearch_nodes | length > 0
+        - has_elasticsearch_nodes
+        - node.name is defined
 
     - name: Display SSL certificate setup success
       debug:
@@ -343,15 +375,15 @@
           CA Certificate: /usr/share/siem/elasticsearch/certs/ca/ca.crt
           
           Node Certificates Generated:
-          {% for node in elasticsearch_nodes %}
+          {% for node in elasticsearch_nodes | default([]) %}
+          {% if node.name is defined %}
           - {{ node.name }}: /usr/share/siem/elasticsearch/certs/{{ node.name }}/{{ node.name }}.crt
+          {% endif %}
           {% endfor %}
           
           Certificate verification: All certificates valid ✅
           Ready for multi-node Elasticsearch deployment! 🚀
-      when: 
-        - elasticsearch_nodes is defined
-        - elasticsearch_nodes | length > 0
+      when: has_elasticsearch_nodes
 
   rescue:
     - name: Handle certificate generation failure
@@ -367,7 +399,6 @@
           
           Manual certificate generation:
           ansible-playbook -i inventory.yml main-playbook.yml --tags ssl_multinode --limit {{ inventory_hostname }}
+      when: has_elasticsearch_nodes
 
-  when: 
-    - elasticsearch_nodes is defined
-    - elasticsearch_nodes | length > 0
+  when: has_elasticsearch_nodes

@@ -1,0 +1,12 @@
+---
+- name: "Run this module just on BDA"
+  block:
+    - name: config elastic masp service
+      import_tasks: configure-masp-service.yml
+      tags: [cluster , simple]
+
+    - name: Setup docker image
+      import_tasks: load-docker-image.yml
+      tags: [cluster , simple, update]
+    
+  when: "'BDA' in group_names"

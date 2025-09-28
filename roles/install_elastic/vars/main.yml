@@ -1,10 +1,11 @@
 ---
-reserved_xpack_users: ["elastic", "kibana", "logstash_system"]
-sysd_config_file: "/etc/systemd/system/elasticsearch.service.d/override.conf"
+# Essential variables for Elasticsearch installation
 
-# Docker-specific variables
-# Docker Configuration (MUST MATCH ACTUAL PATHS)
+# Version and Docker Configuration
+es_version: "8.18.2"
 elasticsearch_docker_image: "docker.apk-group.net/elasticsearch"
+
+# Docker Configuration (CRITICAL - MUST MATCH ACTUAL PATHS)
 elasticsearch_docker_path: "/usr/share/siem/elasticsearch"
 elasticsearch_data_path: "{{ elasticsearch_docker_path }}/data"
 elasticsearch_logs_path: "{{ elasticsearch_docker_path }}/logs"
@@ -12,28 +13,37 @@ elasticsearch_config_path: "{{ elasticsearch_docker_path }}/config"
 elasticsearch_certs_path: "{{ elasticsearch_docker_path }}/certs"
 elasticsearch_compose_path: "{{ elasticsearch_docker_path }}/docker-compose.yml"
 
+# Network Configuration
+es_http_base_port: 9200
+es_transport_base_port: 9300
+
 # SSL Certificate Configuration (CRITICAL - MUST BE CORRECT)
 es_ssl_certificate_path: "{{ elasticsearch_certs_path }}"
 es_enable_http_ssl: true
 es_enable_transport_ssl: true
 es_enable_security: true
 es_ssl_verification_mode: "certificate"
+es_validate_certs: false
 
 # Cluster Configuration
 es_cluster_name: "siem-cluster"
 es_heap_size: "1g"
 
-# Make sure these are also set correctly:
-es_validate_certs: no
+# Authentication Configuration
 es_api_basic_auth_username: "elastic"
-# es_api_basic_auth_password should be in your inventory or group_vars
+es_api_basic_auth_password: "YourVerySecureElasticsearchPassword123!"
 
+# Basic Elasticsearch Configuration
 es_config:
-  cluster.name: "siem-cluster"
+  cluster.name: "{{ es_cluster_name }}"
+  action.auto_create_index: true
+  cluster.max_shards_per_node: 2000
+
+# File-based Users Configuration
 es_users:
   file:
     logstash_user:
-      password: rgaerasdcvgbaerwefawedawdscvfgt
+      password: "rgaerasdcvgbaerwefawedawdscvfgt"
       roles:
         - kibana4_server
     elastic_maps:
@@ -42,7 +52,7 @@ es_users:
         - monitoring_user
         - apm_system
     siem:
-      password: Ch@ng3Th!sP@ssw0rd
+      password: "Ch@ng3Th!sP@ssw0rd"
       roles:
         - superuser
         - monitoring_user
@@ -50,17 +60,19 @@ es_users:
         - admin
         - kibana_system
     es_admin:
-      password: Ch@ng3Th!sP@ssw0rd
+      password: "Ch@ng3Th!sP@ssw0rd"
       roles:
         - admin
         - superuser
         - monitoring_user
         - kibana_admin
     testUser:
-      password: Ch@ng3Th!sP@ssw0rd
+      password: "Ch@ng3Th!sP@ssw0rd"
       roles:
         - power_user
         - user
+
+# File-based Roles Configuration
 es_roles:
   file:
     kibana4_server:
@@ -93,5 +105,34 @@ es_roles:
           privileges:
             - read
 
+# Legacy variables for compatibility
+reserved_xpack_users: ["elastic", "kibana", "logstash_system"]
+sysd_config_file: "/etc/systemd/system/elasticsearch.service.d/override.conf"
+
 # Used in update process
 updater_user_username: "updater_user"
+
+# JVM Configuration
+es_jvm_custom_parameters: []
+
+# Additional configuration defaults
+es_enable_auto_ssl_configuration: true
+es_ssl_upload: true
+es_ssl_key: true
+es_ssl_certificate: true
+es_ssl_certificate_authority: true
+es_delete_unmanaged_file: true
+es_delete_unmanaged_native: true
+
+# Performance and system settings
+es_max_open_files: 65536
+es_max_map_count: 262144
+
+# API settings
+es_api_scheme: "https"
+es_api_host: "localhost"
+es_api_port: 9200
+es_api_uri: "{{ es_api_scheme }}://{{ es_api_host }}:{{ es_api_port }}"
+es_security_api: "_security"
+es_license_api: "_license"
+es_api_sleep: 15

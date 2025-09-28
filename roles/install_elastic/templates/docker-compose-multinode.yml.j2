@@ -3,43 +3,54 @@ version: '3.8'
 services:
 {%- for node in elasticsearch_nodes %}
   {{ node.name }}:
-    image: {{ elasticsearch_docker_image }}:{{ es_version }}
+    image: {{ elasticsearch_docker_image | default('docker.apk-group.net/elasticsearch') }}:{{ es_version | default('8.18.2') }}
     container_name: {{ node.name }}
     hostname: {{ node.name }}
     restart: unless-stopped
     
     environment:
-      node.name: {{ node.name }}
-      cluster.name: {{ es_cluster_name | default('siem-cluster') }}
-      network.host: "0.0.0.0"
-      http.port: "9200"
-      transport.port: "9300"
-      discovery.seed_hosts: "{{ elasticsearch_seed_hosts }}"
-      cluster.initial_master_nodes: "{{ elasticsearch_master_nodes }}"
-      bootstrap.memory_lock: "true"
-      ES_JAVA_OPTS: "-Xms{{ node.heap_size | default('1g') }} -Xmx{{ node.heap_size | default('1g') }}"
-      xpack.security.enabled: "true"
-{%- set roles_list = [] %}
-{%- for role in node.roles %}
-{%- set _ = roles_list.append('"' + role + '"') %}
-{%- endfor %}
-      node.roles: "[{{ roles_list | join(',') }}]"
-      cluster.max_shards_per_node: "2000"
-      action.auto_create_index: "true"
+      # Basic node configuration
+      - "node.name={{ node.name }}"
+      - "cluster.name={{ es_cluster_name | default('siem-cluster') }}"
+      - "network.host=0.0.0.0"
+      - "http.port=9200"
+      - "transport.port=9300"
+      
+      # Discovery configuration
+      - "discovery.seed_hosts={{ elasticsearch_seed_hosts | default(ansible_default_ipv4.address + ':9300') }}"
+      - "cluster.initial_master_nodes={{ elasticsearch_master_nodes | default(ansible_default_ipv4.address + ':9300') }}"
+      
+      # Memory and JVM settings
+      - "bootstrap.memory_lock=true"
+      - "ES_JAVA_OPTS=-Xms{{ node.heap_size | default('1g') }} -Xmx{{ node.heap_size | default('1g') }}"
+      
+      # Node roles
+{%- if node.roles is defined and node.roles | length > 0 %}
+      - "node.roles=[{% for role in node.roles %}"{{ role }}"{% if not loop.last %},{% endif %}{% endfor %}]"
+{%- else %}
+      - "node.roles=[\"data\"]"
+{%- endif %}
+      
+      # Performance settings
+      - "cluster.max_shards_per_node=2000"
+      - "action.auto_create_index=true"
+      
+      # Security configuration
+      - "xpack.security.enabled=true"
 {%- if es_enable_http_ssl | default(true) %}
-      xpack.security.http.ssl.enabled: "true"
-      xpack.security.http.ssl.key: "/usr/share/elasticsearch/config/certs/{{ node.name }}/{{ node.name }}.key"
-      xpack.security.http.ssl.certificate: "/usr/share/elasticsearch/config/certs/{{ node.name }}/{{ node.name }}.crt"
-      xpack.security.http.ssl.certificate_authorities: "/usr/share/elasticsearch/config/certs/ca/ca.crt"
+      - "xpack.security.http.ssl.enabled=true"
+      - "xpack.security.http.ssl.key=/usr/share/elasticsearch/config/certs/{{ node.name }}/{{ node.name }}.key"
+      - "xpack.security.http.ssl.certificate=/usr/share/elasticsearch/config/certs/{{ node.name }}/{{ node.name }}.crt"
+      - "xpack.security.http.ssl.certificate_authorities=/usr/share/elasticsearch/config/certs/ca/ca.crt"
 {%- endif %}
 {%- if es_enable_transport_ssl | default(true) %}
-      xpack.security.transport.ssl.enabled: "true"
-      xpack.security.transport.ssl.key: "/usr/share/elasticsearch/config/certs/{{ node.name }}/{{ node.name }}.key"
-      xpack.security.transport.ssl.certificate: "/usr/share/elasticsearch/config/certs/{{ node.name }}/{{ node.name }}.crt"
-      xpack.security.transport.ssl.certificate_authorities: "/usr/share/elasticsearch/config/certs/ca/ca.crt"
+      - "xpack.security.transport.ssl.enabled=true"
+      - "xpack.security.transport.ssl.key=/usr/share/elasticsearch/config/certs/{{ node.name }}/{{ node.name }}.key"
+      - "xpack.security.transport.ssl.certificate=/usr/share/elasticsearch/config/certs/{{ node.name }}/{{ node.name }}.crt"
+      - "xpack.security.transport.ssl.certificate_authorities=/usr/share/elasticsearch/config/certs/ca/ca.crt"
 {%- endif %}
 {%- if es_api_basic_auth_password is defined %}
-      ELASTIC_PASSWORD: "{{ es_api_basic_auth_password }}"
+      - "ELASTIC_PASSWORD={{ es_api_basic_auth_password }}"
 {%- endif %}
 
     ulimits:
@@ -51,8 +62,8 @@ services:
         hard: 65536
 
     ports:
-      - "{{ ansible_default_ipv4.address }}:{{ es_http_base_port + node.port_offset }}:9200"
-      - "{{ ansible_default_ipv4.address }}:{{ es_transport_base_port + node.port_offset }}:9300"
+      - "{{ ansible_default_ipv4.address }}:{{ (es_http_base_port | default(9200)) + (node.port_offset | default(0)) }}:9200"
+      - "{{ ansible_default_ipv4.address }}:{{ (es_transport_base_port | default(9300)) + (node.port_offset | default(0)) }}:9300"
 
     volumes:
       - "/usr/share/siem/elasticsearch/{{ node.name }}/data:/usr/share/elasticsearch/data:Z"
@@ -80,15 +91,12 @@ services:
     deploy:
       resources:
         limits:
-{%- set heap_gb = node.heap_size | default('1g') | regex_replace('g$', '') | int %}
-          memory: "{{ heap_gb * 2 }}G"
+{%- set heap_gb = (node.heap_size | default('1g') | regex_replace('g$', '') | int) %}
+          memory: "{{ (heap_gb * 2) | int }}G"
         reservations:
           memory: "{{ node.heap_size | default('1g') }}"
 
-{%- if not loop.last %}
-
-{%- endif %}
-{%- endfor %}
+{% endfor %}
 
 networks:
   elastic:
