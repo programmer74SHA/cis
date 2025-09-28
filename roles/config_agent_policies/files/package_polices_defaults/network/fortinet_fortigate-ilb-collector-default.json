@@ -1,0 +1,200 @@
+{
+  "id": "fortinet_fortigate-ilb-collector-default",
+  "name": "fortinet_fortigate (ilb-collector-default)",
+  "namespace": "",
+  "policy_id": "ilb-collector-default",
+  "enabled": true,
+  "package": {
+    "name": "fortinet_fortigate",
+    "version": ""
+  },
+  "inputs": [
+    {
+      "type": "logfile",
+      "policy_template": "fortinet_fortigate",
+      "enabled": false,
+      "streams": [
+        {
+          "enabled": false,
+          "data_stream": {
+            "type": "logs",
+            "dataset": "fortinet_fortigate.log"
+          },
+          "vars": {
+            "paths": {
+              "value": [
+                "/var/log/fortinet-firewall.log"
+              ],
+              "type": "text"
+            },
+            "tags": {
+              "value": [
+                "fortinet-fortigate",
+                "fortinet-firewall",
+                "forwarded"
+              ],
+              "type": "text"
+            },
+            "internal_interfaces": {
+              "value": [],
+              "type": "text"
+            },
+            "external_interfaces": {
+              "value": [],
+              "type": "text"
+            },
+            "internal_networks": {
+              "value": [
+                "private"
+              ],
+              "type": "text"
+            },
+            "preserve_original_event": {
+              "value": false,
+              "type": "bool"
+            },
+            "processors": {
+              "type": "yaml"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "tcp",
+      "policy_template": "fortinet_fortigate",
+      "enabled": false,
+      "streams": [
+        {
+          "enabled": false,
+          "data_stream": {
+            "type": "logs",
+            "dataset": "fortinet_fortigate.log"
+          },
+          "vars": {
+            "syslog_host": {
+              "value": "localhost",
+              "type": "text"
+            },
+            "syslog_port": {
+              "value": 9004,
+              "type": "integer"
+            },
+            "tags": {
+              "value": [
+                "fortinet-fortigate",
+                "fortinet-firewall",
+                "forwarded"
+              ],
+              "type": "text"
+            },
+            "internal_interfaces": {
+              "value": [],
+              "type": "text"
+            },
+            "external_interfaces": {
+              "value": [],
+              "type": "text"
+            },
+            "internal_networks": {
+              "value": [
+                "private"
+              ],
+              "type": "text"
+            },
+            "preserve_original_event": {
+              "value": false,
+              "type": "bool"
+            },
+            "processors": {
+              "type": "yaml"
+            },
+            "ssl": {
+              "value": "#certificate_authorities:\n#  - |\n#    -----BEGIN CERTIFICATE-----\n#    MIIDCjCCAfKgAwIBAgITJ706Mu2wJlKckpIvkWxEHvEyijANBgkqhkiG9w0BAQsF\n#    ADAUMRIwEAYDVQQDDAlsb2NhbGhvc3QwIBcNMTkwNzIyMTkyOTA0WhgPMjExOTA2\n#    MjgxOTI5MDRaMBQxEjAQBgNVBAMMCWxvY2FsaG9zdDCCASIwDQYJKoZIhvcNAQEB\n#    BQADggEPADCCAQoCggEBANce58Y/JykI58iyOXpxGfw0/gMvF0hUQAcUrSMxEO6n\n#    fZRA49b4OV4SwWmA3395uL2eB2NB8y8qdQ9muXUdPBWE4l9rMZ6gmfu90N5B5uEl\n#    94NcfBfYOKi1fJQ9i7WKhTjlRkMCgBkWPkUokvBZFRt8RtF7zI77BSEorHGQCk9t\n#    /D7BS0GJyfVEhftbWcFEAG3VRcoMhF7kUzYwp+qESoriFRYLeDWv68ZOvG7eoWnP\n#    PsvZStEVEimjvK5NSESEQa9xWyJOmlOKXhkdymtcUd/nXnx6UTCFgnkgzSdTWV41\n#    CI6B6aJ9svCTI2QuoIq2HxX/ix7OvW1huVmcyHVxyUECAwEAAaNTMFEwHQYDVR0O\n#    BBYEFPwN1OceFGm9v6ux8G+DZ3TUDYxqMB8GA1UdIwQYMBaAFPwN1OceFGm9v6ux\n#    8G+DZ3TUDYxqMA8GA1UdEwEB/wQFMAMBAf8wDQYJKoZIhvcNAQELBQADggEBAG5D\n#    874A4YI7YUwOVsVAdbWtgp1d0zKcPRR+r2OdSbTAV5/gcS3jgBJ3i1BN34JuDVFw\n#    3DeJSYT3nxy2Y56lLnxDeF8CUTUtVQx3CuGkRg1ouGAHpO/6OqOhwLLorEmxi7tA\n#    H2O8mtT0poX5AnOAhzVy7QW0D/k4WaoLyckM5hUa6RtvgvLxOwA0U+VGurCDoctu\n#    8F4QOgTAWyh8EZIwaKCliFRSynDpv3JTUwtfZkxo6K6nce1RhCWFAsMvDZL8Dgc0\n#    yvgJ38BRsFOtkRuAGSf6ZUwTO8JJRRIFnpUzXflAnGivK9M13D5GEQMmIl6U9Pvk\n#    sxSmbIUfc2SGJGCJD4I=\n#    -----END CERTIFICATE-----",
+              "type": "yaml"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "udp",
+      "policy_template": "fortinet_fortigate",
+      "enabled": true,
+      "streams": [
+        {
+          "enabled": true,
+          "data_stream": {
+            "type": "logs",
+            "dataset": "fortinet_fortigate.log"
+          },
+          "vars": {
+            "syslog_host": {
+              "type": "text",
+              "value": "0.0.0.0"
+            },
+            "syslog_port": {
+              "type": "integer",
+              "value": "5534"
+            },
+            "tags": {
+              "value": [
+                "fortinet-fortigate",
+                "fortinet-firewall",
+                "forwarded"
+              ],
+              "type": "text"
+            },
+            "internal_interfaces": {
+              "value": [],
+              "type": "text"
+            },
+            "external_interfaces": {
+              "value": [],
+              "type": "text"
+            },
+            "internal_networks": {
+              "value": [
+                "private"
+              ],
+              "type": "text"
+            },
+            "preserve_original_event": {
+              "type": "bool",
+              "value": true
+            },
+            "udp_options": {
+              "value": "#read_buffer: 100MiB\n#max_message_size: 50KiB\n#timeout: 300s",
+              "type": "yaml"
+            },
+            "processors": {
+              "type": "yaml"
+            }
+          },
+          "compiled_stream": {
+            "host": "0.0.0.0:5534",
+            "tags": [
+              "preserve_original_event",
+              "fortinet-fortigate",
+              "fortinet-firewall",
+              "forwarded"
+            ],
+            "publisher_pipeline.disable_host": true,
+            "processors": [
+              {
+                "add_fields": {
+                  "target": "_temp",
+                  "fields": {
+                    "internal_networks": [
+                      "private"
+                    ]
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

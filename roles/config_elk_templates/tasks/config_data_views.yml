@@ -1,0 +1,16 @@
+- name: Import saved objects into Kibana
+  uri:
+    url: "{{ kibana_address }}/api/saved_objects/_import?overwrite=true"
+    method: POST
+    user: "{{ elk_user }}"
+    password: "{{ elk_password }}"
+    headers:
+      kbn-xsrf: "true"
+    body_format: form-multipart
+    body:
+      file:
+        content: "{{ lookup('file', 'files/data-view-V1.0.1.ndjson') }}"
+        filename: "data-view-V1.0.1.ndjson"
+    force_basic_auth: yes
+    status_code: 200
+    validate_certs: no

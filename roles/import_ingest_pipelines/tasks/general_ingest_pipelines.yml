@@ -1,0 +1,17 @@
+- name: include the data stream variables
+  include_vars: gegeral_pipline_datasets.yml
+
+- name: Create the general pipelines
+  uri:
+    url: "{{ elastic_address }}/_ingest/pipeline/logs-{{ item }}@custom"
+    method: PUT
+    body: "{{ lookup('file', 'files/ingest_pipelines/general_ingest_pipeline.json') }}"
+    body_format: json
+    headers:
+      Content-Type: application/json
+    user: "{{ elk_user }}"
+    password: "{{ elk_password }}"
+    validate_certs: no
+    force_basic_auth: yes
+    timeout: 200
+  with_items: "{{ DATA_STREAMS }}"

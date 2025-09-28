@@ -1,0 +1,10 @@
+{
+  "id": "endpoint-windows-servers-default",
+  "name": "endpoint (windows-servers-default)",
+  "namespace": "",
+  "policy_id": "windows-servers-default",
+  "package": {
+    "name": "endpoint",
+    "version": ""
+  }
+}

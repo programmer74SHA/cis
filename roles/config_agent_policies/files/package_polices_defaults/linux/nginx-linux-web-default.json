@@ -1,0 +1,254 @@
+{
+  "id": "nginx-linux-web-default",
+  "name": "nginx (linux-web-default)",
+  "namespace": "",
+  "policy_id": "linux-web-default",
+  "enabled": true,
+  "package": {
+    "name": "nginx",
+    "version": ""
+  },
+  "inputs": [
+    {
+      "type": "logfile",
+      "policy_template": "nginx",
+      "enabled": true,
+      "streams": [
+        {
+          "enabled": true,
+          "data_stream": {
+            "type": "logs",
+            "dataset": "nginx.access"
+          },
+          "vars": {
+            "paths": {
+              "value": [
+                "/var/log/nginx/access.log*"
+              ],
+              "type": "text"
+            },
+            "tags": {
+              "value": [
+                "nginx-access"
+              ],
+              "type": "text"
+            },
+            "preserve_original_event": {
+              "type": "bool",
+              "value": true
+            },
+            "processors": {
+              "type": "yaml"
+            },
+            "ignore_older": {
+              "value": "72h",
+              "type": "text"
+            }
+          },
+          "compiled_stream": {
+            "ignore_older": "72h",
+            "paths": [
+              "/var/log/nginx/access.log*"
+            ],
+            "tags": [
+              "preserve_original_event",
+              "nginx-access"
+            ],
+            "exclude_files": [
+              ".gz$"
+            ],
+            "processors": [
+              {
+                "add_locale": null
+              }
+            ]
+          }
+        },
+        {
+          "enabled": true,
+          "data_stream": {
+            "type": "logs",
+            "dataset": "nginx.error"
+          },
+          "vars": {
+            "paths": {
+              "value": [
+                "/var/log/nginx/error.log*"
+              ],
+              "type": "text"
+            },
+            "tags": {
+              "value": [
+                "nginx-error"
+              ],
+              "type": "text"
+            },
+            "preserve_original_event": {
+              "type": "bool",
+              "value": true
+            },
+            "processors": {
+              "type": "yaml"
+            },
+            "ignore_older": {
+              "value": "72h",
+              "type": "text"
+            }
+          },
+          "compiled_stream": {
+            "ignore_older": "72h",
+            "paths": [
+              "/var/log/nginx/error.log*"
+            ],
+            "tags": [
+              "preserve_original_event",
+              "nginx-error"
+            ],
+            "exclude_files": [
+              ".gz$"
+            ],
+            "multiline": {
+              "pattern": "^\\d{4}/\\d{2}/\\d{2} ",
+              "negate": true,
+              "match": "after"
+            },
+            "processors": [
+              {
+                "add_locale": null
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "type": "httpjson",
+      "policy_template": "nginx",
+      "enabled": false,
+      "streams": [
+        {
+          "enabled": false,
+          "data_stream": {
+            "type": "logs",
+            "dataset": "nginx.access"
+          },
+          "vars": {
+            "interval": {
+              "value": "10s",
+              "type": "text"
+            },
+            "search": {
+              "value": "search sourcetype=nginx:plus:access",
+              "type": "text"
+            },
+            "tags": {
+              "value": [
+                "forwarded",
+                "nginx-access"
+              ],
+              "type": "text"
+            },
+            "preserve_original_event": {
+              "value": false,
+              "type": "bool"
+            },
+            "processors": {
+              "type": "yaml"
+            }
+          }
+        },
+        {
+          "enabled": false,
+          "data_stream": {
+            "type": "logs",
+            "dataset": "nginx.error"
+          },
+          "vars": {
+            "interval": {
+              "value": "10s",
+              "type": "text"
+            },
+            "search": {
+              "value": "search sourcetype=nginx:plus:error",
+              "type": "text"
+            },
+            "tags": {
+              "value": [
+                "forwarded",
+                "nginx-error"
+              ],
+              "type": "text"
+            },
+            "preserve_original_event": {
+              "value": false,
+              "type": "bool"
+            },
+            "processors": {
+              "type": "yaml"
+            }
+          }
+        }
+      ],
+      "vars": {
+        "url": {
+          "value": "https://server.example.com:8089",
+          "type": "text"
+        },
+        "enable_request_tracer": {
+          "type": "bool"
+        },
+        "username": {
+          "type": "text"
+        },
+        "password": {
+          "type": "password"
+        },
+        "token": {
+          "type": "password"
+        },
+        "ssl": {
+          "value": "#certificate_authorities:\n#  - |\n#    -----BEGIN CERTIFICATE-----\n#    MIIDCjCCAfKgAwIBAgITJ706Mu2wJlKckpIvkWxEHvEyijANBgkqhkiG9w0BAQsF\n#    ADAUMRIwEAYDVQQDDAlsb2NhbGhvc3QwIBcNMTkwNzIyMTkyOTA0WhgPMjExOTA2\n#    MjgxOTI5MDRaMBQxEjAQBgNVBAMMCWxvY2FsaG9zdDCCASIwDQYJKoZIhvcNAQEB\n#    BQADggEPADCCAQoCggEBANce58Y/JykI58iyOXpxGfw0/gMvF0hUQAcUrSMxEO6n\n#    fZRA49b4OV4SwWmA3395uL2eB2NB8y8qdQ9muXUdPBWE4l9rMZ6gmfu90N5B5uEl\n#    94NcfBfYOKi1fJQ9i7WKhTjlRkMCgBkWPkUokvBZFRt8RtF7zI77BSEorHGQCk9t\n#    /D7BS0GJyfVEhftbWcFEAG3VRcoMhF7kUzYwp+qESoriFRYLeDWv68ZOvG7eoWnP\n#    PsvZStEVEimjvK5NSESEQa9xWyJOmlOKXhkdymtcUd/nXnx6UTCFgnkgzSdTWV41\n#    CI6B6aJ9svCTI2QuoIq2HxX/ix7OvW1huVmcyHVxyUECAwEAAaNTMFEwHQYDVR0O\n#    BBYEFPwN1OceFGm9v6ux8G+DZ3TUDYxqMB8GA1UdIwQYMBaAFPwN1OceFGm9v6ux\n#    8G+DZ3TUDYxqMA8GA1UdEwEB/wQFMAMBAf8wDQYJKoZIhvcNAQELBQADggEBAG5D\n#    874A4YI7YUwOVsVAdbWtgp1d0zKcPRR+r2OdSbTAV5/gcS3jgBJ3i1BN34JuDVFw\n#    3DeJSYT3nxy2Y56lLnxDeF8CUTUtVQx3CuGkRg1ouGAHpO/6OqOhwLLorEmxi7tA\n#    H2O8mtT0poX5AnOAhzVy7QW0D/k4WaoLyckM5hUa6RtvgvLxOwA0U+VGurCDoctu\n#    8F4QOgTAWyh8EZIwaKCliFRSynDpv3JTUwtfZkxo6K6nce1RhCWFAsMvDZL8Dgc0\n#    yvgJ38BRsFOtkRuAGSf6ZUwTO8JJRRIFnpUzXflAnGivK9M13D5GEQMmIl6U9Pvk\n#    sxSmbIUfc2SGJGCJD4I=\n#    -----END CERTIFICATE-----",
+          "type": "yaml"
+        }
+      }
+    },
+    {
+      "type": "nginx/metrics",
+      "policy_template": "nginx",
+      "enabled": false,
+      "streams": [
+        {
+          "enabled": false,
+          "data_stream": {
+            "type": "metrics",
+            "dataset": "nginx.stubstatus"
+          },
+          "vars": {
+            "period": {
+              "value": "10s",
+              "type": "text"
+            },
+            "server_status_path": {
+              "value": "/nginx_status",
+              "type": "text"
+            },
+            "tags": {
+              "value": [
+                "nginx-stubstatus"
+              ],
+              "type": "text"
+            }
+          }
+        }
+      ],
+      "vars": {
+        "hosts": {
+          "value": [
+            "http://127.0.0.1:80"
+          ],
+          "type": "text"
+        }
+      }
+    }
+  ]
+}

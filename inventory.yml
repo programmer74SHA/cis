@@ -1,0 +1,282 @@
+---
+all:
+  children:
+    # Physical hosts that will run Elasticsearch containers
+    physical_hosts:
+      hosts:
+        host1:
+          ansible_host: 192.168.166.130
+          ansible_user: root
+          ansible_ssh_pass: 'password'
+          ansible_connection: ssh
+          elasticsearch_nodes:
+            # 1 Master node on host1
+            - name: master-host1
+              roles: ['master']
+              port_offset: 0
+              group_membership: ['MASTER', 'ELASTICSEARCH']
+              heap_size: '2g'
+            
+            # 1 Hot node on host1
+            - name: hot-host1
+              roles: ['data_hot', 'data_content']
+              port_offset: 1
+              group_membership: ['HOT', 'DATA_NODES', 'ELASTICSEARCH']
+              heap_size: '4g'
+            
+            # 1 ML node on host1
+            - name: ml-host1
+              roles: ['ml', 'transform']
+              port_offset: 2
+              group_membership: ['ML', 'ELASTICSEARCH']
+              heap_size: '3g'
+
+        host2:
+          ansible_host: 192.168.166.131
+          ansible_user: root
+          ansible_ssh_pass: 'password'
+          ansible_connection: ssh
+          elasticsearch_nodes:
+            # 1 Master node on host2
+            - name: master-host2
+              roles: ['master']
+              port_offset: 0
+              group_membership: ['MASTER', 'ELASTICSEARCH']
+              heap_size: '2g'
+            
+            # 1 Warm node on host2
+            - name: warm-host2
+              roles: ['data_warm']
+              port_offset: 1
+              group_membership: ['WARM', 'DATA_NODES', 'ELASTICSEARCH']
+              heap_size: '4g'
+            
+            # 1 SF/Ingest node on host2 (REQUIRED for LB)
+            - name: sf-host2
+              roles: ['ingest', 'transform']
+              port_offset: 2
+              group_membership: ['SF', 'ELASTICSEARCH']
+              heap_size: '3g'
+
+        host3:
+          ansible_host: 192.168.166.132
+          ansible_user: root
+          ansible_ssh_pass: 'password'
+          ansible_connection: ssh
+          elasticsearch_nodes:
+            # 1 Master node on host3
+            - name: master-host3
+              roles: ['master']
+              port_offset: 0
+              group_membership: ['MASTER', 'ELASTICSEARCH']
+              heap_size: '2g'
+            
+            # 1 Hot node on host3
+            - name: hot-host3
+              roles: ['data_hot', 'data_content']
+              port_offset: 1
+              group_membership: ['HOT', 'DATA_NODES', 'ELASTICSEARCH']
+              heap_size: '4g'
+            
+            # 1 Cold node on host3 (for tier diversity)
+            - name: cold-host3
+              roles: ['data_cold']
+              port_offset: 2
+              group_membership: ['COLD', 'DATA_NODES', 'ELASTICSEARCH']
+              heap_size: '2g'
+
+        # BDA node (Business Data Analytics - main management node)
+        # FIXED: Proper SSH connection for BDA node
+        bda:
+          ansible_host: 127.0.0.1
+          ansible_user: root
+          ansible_ssh_pass: 'password'
+          ansible_connection: ssh
+          ansible_ssh_common_args: '-o StrictHostKeyChecking=no'
+          # Service configuration for BDA
+          install_kibana: true
+          install_elasticsearch: true
+          elasticsearch_nodes:
+            - name: bda-master
+              roles: ['master', 'transform', 'ml', 'ingest', 'data_content']
+              port_offset: 0
+              group_membership: ['BDA', 'MASTER', 'SF', 'ELASTICSEARCH']
+              heap_size: '4g'
+
+        # Load balancer
+        lb1:
+          ansible_host: 192.168.166.134
+          ansible_user: root
+          ansible_ssh_pass: 'password'
+          ansible_connection: ssh
+          service_type: 'load_balancer'  # This host won't run Elasticsearch
+
+    # Logical groups (populated dynamically and statically)
+    BDA:
+      hosts:
+        bda: {}
+    
+    MASTER:
+      hosts:
+        host1: {}
+        host2: {}
+        host3: {}
+        bda: {}
+      
+    HOT:
+      hosts:
+        host1: {}
+        host3: {}
+      
+    WARM:
+      hosts:
+        host2: {}
+      
+    COLD:
+      hosts:
+        host3: {}
+      
+    FROZEN:
+      hosts: {}  # No frozen nodes in simplified setup
+      
+    ML:
+      hosts:
+        host1: {}
+        bda: {}
+      
+    COORDINATOR:
+      hosts: {}  # No dedicated coordinator in simplified setup
+    
+    # SF group - CRITICAL: Must have at least 2 hosts when LB group exists
+    SF:
+      hosts:
+        host2: {}  # Has sf-host2 node
+        bda: {}    # BDA also has ingest capability
+      
+    LB:
+      hosts:
+        lb1: {}
+    
+    ELASTICSEARCH:
+      hosts:
+        host1: {}
+        host2: {}
+        host3: {}
+        bda: {}
+      
+    DATA_NODES:
+      hosts:
+        host1: {}
+        host2: {}
+        host3: {}
+      
+    # Empty groups (required by pre-checks but not used in this deployment)
+    SCANNER:
+      hosts: {}
+      
+    NBA:
+      hosts: {}
+      
+    COLLECTOR:
+      hosts: {}
+
+  vars:
+    # Global Ansible configuration
+    ansible_ssh_common_args: '-o StrictHostKeyChecking=no'
+    top_level_domain: apk-siem
+    Lshell_user_password: 'YourSecureLshellPassword123!'
+    ntp_servers: 'pool.ntp.org'
+    siem_version: 7.8.0
+    nba_interface_name: ens090
+    
+    # Elasticsearch cluster configuration
+    es_cluster_name: 'siem-multi-node-cluster'
+    es_version: '8.18.2'
+    
+    # Docker network configuration
+    docker_network_name: 'elastic'
+    docker_network_subnet: '172.20.0.0/16'
+    
+    # Port configuration - IMPORTANT: These are base ports, actual ports = base + offset
+    es_http_base_port: 9200
+    es_transport_base_port: 9300
+    
+    # SSL/TLS configuration
+    es_enable_http_ssl: true
+    es_enable_transport_ssl: true
+    es_enable_security: true
+    es_ssl_verification_mode: 'certificate'
+    es_validate_certs: false
+    
+    # Authentication configuration
+    es_api_basic_auth_username: 'elastic'
+    es_api_basic_auth_password: 'YourVerySecureElasticsearchPassword123!'
+    
+    # Kibana configuration (for BDA node)
+    kibana_version: '8.18.2'
+    kibana_port: 5601
+    kibana_host: '0.0.0.0'
+    kibana_elasticsearch_hosts: 'https://127.0.0.1:9200'
+    kibana_elasticsearch_username: 'elastic'
+    kibana_elasticsearch_password: 'YourVerySecureElasticsearchPassword123!'
+    
+    # Performance settings
+    disable_swap_permanently: true
+    
+    # System configuration
+    net_core_rmem_max: 67108864
+    net_core_rmem_default: 67108864
+    disable_ipv6: 1
+    bash_history_size: 10000
+
+# =============================================================================================
+# FIXED CONFIGURATION SUMMARY
+# =============================================================================================
+# 
+# 🏠 Physical Hosts: 4 (host1, host2, host3, bda) + 1 LB (lb1)
+# 📊 Total Elasticsearch Nodes: 10
+# 🖥️ Kibana: Installed on BDA node (127.0.0.1:5601)
+# 
+# 📍 Node Distribution:
+# - host1 (192.168.166.130): 3 nodes
+#   * 1 Master (port 9200)
+#   * 1 Hot data (port 9201)
+#   * 1 ML (port 9202)
+# 
+# - host2 (192.168.166.131): 3 nodes  
+#   * 1 Master (port 9200)
+#   * 1 Warm data (port 9201)
+#   * 1 SF/Ingest (port 9202)
+# 
+# - host3 (192.168.166.132): 3 nodes
+#   * 1 Master (port 9200) 
+#   * 1 Hot data (port 9201)
+#   * 1 Cold data (port 9202)
+# 
+# - bda (127.0.0.1): 1 node + Kibana
+#   * 1 BDA master with ML/Transform/Ingest/Data (port 9200)
+#   * Kibana management interface (port 5601)
+# 
+# 🎯 Role Summary:
+# - Master-eligible: 4 nodes (1 per host + BDA)
+# - Hot data: 2 nodes (host1, host3)
+# - Warm data: 1 node (host2)
+# - Cold data: 1 node (host3)
+# - ML: 2 nodes (host1 + bda)
+# - SF/Ingest: 2 nodes (host2 + bda) ← Satisfies LB requirement
+# - BDA: 1 node (localhost) ← Also runs Kibana
+# 
+# 🔗 Access Points:
+# ================
+# - Kibana Management: http://127.0.0.1:5601 (on BDA node)
+# - Load Balancer: http://192.168.166.134 (routes to SF nodes)
+# - BDA/Main: https://127.0.0.1:9200
+# - Master nodes: https://host1:9200, https://host2:9200, https://host3:9200
+# 
+# ✅ FIXES APPLIED:
+# =================
+# ✓ BDA connection changed from 'local' to 'ssh' with 127.0.0.1
+# ✓ Added explicit Kibana configuration for BDA node
+# ✓ Fixed template syntax errors in Elasticsearch configuration
+# ✓ Fixed Docker Compose YAML structure
+# ✓ Added proper health checks and resource limits

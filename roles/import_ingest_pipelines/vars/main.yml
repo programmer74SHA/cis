@@ -1,0 +1,6 @@
+---
+elk_user : "siem"
+elk_password: "Ch@ng3Th!sP@ssw0rd"
+kibana_address: "https://{{ hostvars[groups['BDA'][0]]['ansible_default_ipv4']['address'] }}:5601"
+elastic_address: "https://{{ hostvars[groups['BDA'][0]]['ansible_default_ipv4']['address'] }}:9200"
+

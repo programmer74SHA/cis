@@ -1,0 +1,17 @@
+- name: include the default ingest pipline variables
+  include_vars: default_ingest_pipeline.yml
+
+- name: Create the default ingest pipelines
+  uri:
+    url: "{{ elastic_address }}/_ingest/pipeline/{{ item }}"
+    method: PUT
+    body: "{{ lookup('file', '{{ default_ingest_pipeline_path }}/{{ item }}') }}"
+    body_format: json
+    headers:
+      Content-Type: application/json
+    user: "{{ elk_user }}"
+    password: "{{ elk_password }}"
+    validate_certs: no
+    force_basic_auth: yes
+    timeout: 200
+  with_items: "{{ default_agent_pipeline }}"

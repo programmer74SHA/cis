@@ -1,0 +1,106 @@
+---
+- name: "Configure Kibana service on the BDA server"
+  block:
+    - name: Check if kibana service token exists
+      shell: "docker exec elasticsearch-{{ groups['BDA'][0] }} test -f /usr/share/elasticsearch/config/service_tokens && docker exec elasticsearch-{{ groups['BDA'][0] }} grep -q 'elastic/kibana/kibana' /usr/share/elasticsearch/config/service_tokens"
+      register: kibana_token_exists
+      ignore_errors: true
+      changed_when: false
+
+    - name: Wait for Elasticsearch to be ready before creating token
+      uri:
+        url: "https://{{ ansible_default_ipv4.address }}:9200/_cluster/health"
+        method: GET
+        user: "{{ es_api_basic_auth_username | default('elastic') }}"
+        password: "{{ es_api_basic_auth_password }}"
+        force_basic_auth: yes
+        validate_certs: no
+        timeout: 30
+      register: es_health
+      until: es_health.status == 200
+      retries: 30
+      delay: 10
+      when: es_api_basic_auth_password is defined
+
+    - name: "Create Elasticsearch service token for kibana"
+      shell: |
+        docker exec elasticsearch-{{ groups['BDA'][0] }} \
+        /usr/share/elasticsearch/bin/elasticsearch-service-tokens create elastic/kibana kibana
+      register: es_token_generator_output
+      when: kibana_token_exists.rc != 0
+
+    - name: "Extract token from output"
+      set_fact:
+        es_service_token: "{{ es_token_generator_output.stdout | regex_search('(?<=SERVICE_TOKEN elastic/kibana/kibana = ).*') }}"
+      when: 
+        - kibana_token_exists.rc != 0
+        - es_token_generator_output is defined
+
+    - name: "Use existing service token if available"
+      shell: |
+        docker exec elasticsearch-{{ groups['BDA'][0] }} \
+        grep 'elastic/kibana/kibana' /usr/share/elasticsearch/config/service_tokens | cut -d'=' -f2 | tr -d ' '
+      register: existing_token_output
+      when: kibana_token_exists.rc == 0
+
+    - name: "Set service token from existing"
+      set_fact:
+        es_service_token: "{{ existing_token_output.stdout }}"
+      when: 
+        - kibana_token_exists.rc == 0
+        - existing_token_output is defined
+
+    - name: Generate certificate fingerprint
+      shell: |
+        docker exec elasticsearch-{{ groups['BDA'][0] }} \
+        openssl x509 -noout -fingerprint -sha256 -in /usr/share/elasticsearch/config/certs/ca/ca.crt | \
+        sed 's/SHA256 Fingerprint=//' | sed 's/://g' | tr '[:upper:]' '[:lower:]'
+      register: cert_fingerprint_output
+
+    - name: Set certificate fingerprint
+      set_fact:
+        cert_fingerprint: "{{ cert_fingerprint_output.stdout }}"
+
+    - name: "Copy CA file to destination"
+      copy:
+        src: files/ca-certs.pem
+        dest: "{{ kibana_certs_path }}/ca-certs.pem"
+        owner: "1000"
+        group: "1000"
+        mode: "0660"
+
+    - name: "Configure kibana from template file"
+      template:
+        src: templates/kibana-docker.yml.j2
+        dest: "{{ kibana_config_path }}/kibana.yml"
+        owner: "1000"
+        group: "1000"
+        mode: "0660"
+
+    - name: "ALWAYS Generate Kibana Docker Compose file"
+      template:
+        src: docker-compose-kibana.yml.j2
+        dest: "{{ kibana_compose_path }}"
+        owner: "1000"
+        group: "1000"
+        mode: "0644"
+
+    - name: "Verify docker-compose file was created"
+      stat:
+        path: "{{ kibana_compose_path }}"
+      register: compose_file_check
+
+    - name: "Display compose file status"
+      debug:
+        msg: |
+          Docker-compose file status:
+          - Path: {{ kibana_compose_path }}
+          - Exists: {{ compose_file_check.stat.exists }}
+          - Size: {{ compose_file_check.stat.size | default('N/A') }} bytes
+
+    - name: "Fail if compose file was not created"
+      fail:
+        msg: "Docker-compose file was not created at {{ kibana_compose_path }}"
+      when: not compose_file_check.stat.exists
+
+  when: "'BDA' in group_names"

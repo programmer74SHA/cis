@@ -1,0 +1,8 @@
+- name: Install scanner hosts dependencies
+  block:
+    - name: Install scanner hosts dependencies
+      apt:
+        name: ['nmap', 'siem-gvm', 'logstash']
+        state: present
+  when: "'SCANNER' in group_names"
+  tags: [simple, cluster, add-scanner]

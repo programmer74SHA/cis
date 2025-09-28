@@ -1,0 +1,82 @@
+---
+version: '3.8'
+
+services:
+  kibana:
+    image: {{ kibana_docker_image }}:{{ kibana_version }}
+    container_name: kibana-{{ inventory_hostname }}
+    hostname: kibana-{{ inventory_hostname }}
+    restart: unless-stopped
+    
+    environment:
+      # Elasticsearch Configuration
+      - "ELASTICSEARCH_HOSTS=https://{{ ansible_default_ipv4.address }}:9200"
+      - "ELASTICSEARCH_USERNAME={{ kibana_elasticsearch_username | default('kibana_system') }}"
+      - "ELASTICSEARCH_PASSWORD={{ kibana_elasticsearch_password }}"
+      - "ELASTICSEARCH_SSL_CERTIFICATEAUTHORITIES=/usr/share/kibana/config/certs/ca/ca.crt"
+      - "ELASTICSEARCH_SSL_VERIFICATIONMODE=certificate"
+{% if es_service_token is defined and es_service_token != '' %}
+      - "ELASTICSEARCH_SERVICEACCOUNTTOKEN={{ es_service_token }}"
+{% endif %}
+      
+      # Server SSL Configuration
+      - "SERVER_HOST=0.0.0.0"
+      - "SERVER_PORT=5601"
+      - "SERVER_SSL_ENABLED=true"
+      - "SERVER_SSL_KEY=/usr/share/kibana/config/certs/kibana/kibana.key"
+      - "SERVER_SSL_CERTIFICATE=/usr/share/kibana/config/certs/kibana/kibana.crt"
+      
+      # Security Keys
+      - "XPACK_ENCRYPTEDSAVEDOBJECTS_ENCRYPTIONKEY=7946e75bc0cad7f510d933d288ead678"
+      - "XPACK_REPORTING_ENCRYPTIONKEY=bd7bc65d6208bb27cb52b035a25d0e72"
+      - "XPACK_SECURITY_ENCRYPTIONKEY=2f80b83bdec5bdab7d5e9c09f67c1141"
+      
+      # Logging Configuration
+      - "LOGGING_ROOT_LEVEL=info"
+      
+      # Performance Settings
+      - "NODE_OPTIONS=--max-old-space-size=1024"
+
+    ports:
+      - "{{ ansible_default_ipv4.address }}:5601:5601"
+
+    volumes:
+      # Data and logs
+      - "{{ kibana_data_path }}:/usr/share/kibana/data:Z"
+      - "{{ kibana_logs_path }}:/usr/share/kibana/logs:Z"
+      
+      # Configuration
+      - "{{ kibana_config_path }}/kibana.yml:/usr/share/kibana/config/kibana.yml:ro,Z"
+      
+      # SSL Certificates
+      - "{{ kibana_certs_path }}:/usr/share/kibana/config/certs:ro,Z"
+
+    networks:
+      - elastic
+
+    healthcheck:
+      test: 
+        - "CMD-SHELL"
+        - "curl -f -k https://localhost:5601/api/status || exit 1"
+      interval: 30s
+      timeout: 30s
+      retries: 10
+      start_period: 120s
+
+    # Run as kibana user
+    user: "1000:1000"
+
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 1G
+
+    # Add restart policy
+    restart: unless-stopped
+
+networks:
+  elastic:
+    external: true

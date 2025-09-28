@@ -1,0 +1,15 @@
+- name: Check if the network interface exists
+  command: ip link show {{ nba_interface_name }}
+  register: interface_check
+  ignore_errors: true
+
+- name: "Make interface {{ nba_interface_name }} up"
+  command: ip link set {{ nba_interface_name }} up
+  when: interface_check.rc == 0
+
+- name: create network interface
+  template:
+    src: "templates/interface_config.j2"
+    dest: "/etc/network/interfaces.d/{{ nba_interface_name }}"
+  notify: Restart Networking
+  when: interface_check.rc == 0

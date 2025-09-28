@@ -1,0 +1,10 @@
+- name: remove motd banner for update
+  file:
+    path: /etc/motd
+    state: absent
+  tags: update
+
+- name: Copy motd banner to the config directory
+  template:
+    src: templates/siem_banner.j2
+    dest: /etc/motd

@@ -1,0 +1,91 @@
+{
+  "id": "padvish-ilb-collector-default",
+  "name": "padvish (ilb-collector-default)",
+  "namespace": "",
+  "policy_id": "ilb-collector-default",
+  "enabled": true,
+  "package": {
+    "name": "udp",
+    "version": ""
+  },
+  "inputs": [
+    {
+      "type": "udp",
+      "policy_template": "udp",
+      "enabled": true,
+      "streams": [
+        {
+          "enabled": true,
+          "data_stream": {
+            "type": "logs",
+            "dataset": "udp.udp",
+            "elasticsearch": {
+              "dynamic_dataset": true,
+              "dynamic_namespace": true
+            }
+          },
+          "vars": {
+            "listen_address": {
+              "type": "text",
+              "value": "0.0.0.0"
+            },
+            "listen_port": {
+              "type": "text",
+              "value": "5529"
+            },
+            "preserve_original_event": {
+              "value": true,
+              "type": "bool"
+            },
+            "data_stream.dataset": {
+              "type": "text",
+              "value": "padvish"
+            },
+            "pipeline": {
+              "type": "text"
+            },
+            "max_message_size": {
+              "value": "10KiB",
+              "type": "text"
+            },
+            "read_buffer_size": {
+              "type": "text"
+            },
+            "timeout": {
+              "type": "text"
+            },
+            "keep_null": {
+              "value": false,
+              "type": "bool"
+            },
+            "processors": {
+              "type": "yaml"
+            },
+            "tags": {
+              "value": [],
+              "type": "text"
+            },
+            "syslog": {
+              "type": "bool"
+            },
+            "syslog_options": {
+              "value": "field: message\n#format: auto\n#timezone: Local",
+              "type": "yaml"
+            },
+            "custom": {
+              "value": "",
+              "type": "yaml"
+            }
+          },
+          "compiled_stream": {
+            "data_stream": {
+              "dataset": "padvish"
+            },
+            "host": "0.0.0.0:5529",
+            "max_message_size": "10KiB"
+          }
+        }
+      ]
+    }
+  ]
+}

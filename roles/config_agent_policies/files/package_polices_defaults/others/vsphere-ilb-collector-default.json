@@ -1,0 +1,151 @@
+{
+  "id": "vsphere-ilb-collector-default",
+  "name": "vsphere (ilb-collector-default)",
+  "namespace": "",
+  "policy_id": "ilb-collector-default",
+  "enabled": true,
+  "package": {
+    "name": "vsphere",
+    "version": ""
+  },
+  "inputs": [
+    {
+      "type": "udp",
+      "policy_template": "vsphere",
+      "enabled": true,
+      "streams": [
+        {
+          "enabled": true,
+          "data_stream": {
+            "type": "logs",
+            "dataset": "vsphere.log"
+          },
+          "vars": {
+            "tags": {
+              "value": [
+                "vmware-sphere"
+              ],
+              "type": "text"
+            },
+            "listen_address": {
+              "type": "text",
+              "value": "0.0.0.0"
+            },
+            "listen_port": {
+              "type": "integer",
+              "value": "5531"
+            },
+            "preserve_original_event": {
+              "type": "bool",
+              "value": true
+            },
+            "processors": {
+              "type": "yaml"
+            }
+          },
+          "compiled_stream": {
+            "host": "0.0.0.0:5531",
+            "tags": [
+              "preserve_original_event",
+              "vmware-sphere"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "type": "tcp",
+      "policy_template": "vsphere",
+      "enabled": false,
+      "streams": [
+        {
+          "enabled": false,
+          "data_stream": {
+            "type": "logs",
+            "dataset": "vsphere.log"
+          },
+          "vars": {
+            "tags": {
+              "value": [
+                "vmware-vsphere"
+              ],
+              "type": "text"
+            },
+            "listen_address": {
+              "value": "localhost",
+              "type": "text"
+            },
+            "listen_port": {
+              "value": 9525,
+              "type": "integer"
+            },
+            "preserve_original_event": {
+              "value": false,
+              "type": "bool"
+            },
+            "processors": {
+              "type": "yaml"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "vsphere/metrics",
+      "policy_template": "vsphere",
+      "enabled": false,
+      "streams": [
+        {
+          "enabled": false,
+          "data_stream": {
+            "type": "metrics",
+            "dataset": "vsphere.datastore"
+          }
+        },
+        {
+          "enabled": false,
+          "data_stream": {
+            "type": "metrics",
+            "dataset": "vsphere.host"
+          }
+        },
+        {
+          "enabled": false,
+          "data_stream": {
+            "type": "metrics",
+            "dataset": "vsphere.virtualmachine"
+          },
+          "vars": {
+            "get_custom_fields": {
+              "value": false,
+              "type": "bool"
+            }
+          }
+        }
+      ],
+      "vars": {
+        "hosts": {
+          "value": [
+            "https://127.0.0.1:8989/sdk"
+          ],
+          "type": "text"
+        },
+        "username": {
+          "value": "user",
+          "type": "text"
+        },
+        "password": {
+          "type": "password"
+        },
+        "period": {
+          "value": "10s",
+          "type": "text"
+        },
+        "insecure": {
+          "value": false,
+          "type": "bool"
+        }
+      }
+    }
+  ]
+}

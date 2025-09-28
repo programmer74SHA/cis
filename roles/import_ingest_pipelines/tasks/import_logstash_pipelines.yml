@@ -1,0 +1,20 @@
+- name: include the logstash pipelines variables
+  include_vars: logstash_pipeline.yml
+
+
+- name: import logstash pipeline
+  uri:
+    url: "{{ kibana_address }}/api/logstash/pipeline/{{ item.key }}"
+    method: PUT
+    body: "{{ lookup('template', 'templates/logstash_pipeline_payload.json.j2') }}"
+    body_format: json
+    headers:
+      Content-Type: application/json
+      kbn-xsrf: "true"
+    user: "{{ elk_user }}"
+    password: "{{ elk_password }}"
+    validate_certs: no
+    force_basic_auth: yes
+    status_code: 204          
+
+  with_dict: "{{ logstash_pipline_list }}"

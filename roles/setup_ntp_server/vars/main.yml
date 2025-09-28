@@ -1,0 +1,6 @@
+chrony_path: /etc/chrony
+chrony_service: chrony
+ntp_service: ntp
+chrony_logdir: /var/log/chrony/
+chrony_key_id: 85
+chrony_key_file_path: "{{ chrony_path }}/chrony.keys"

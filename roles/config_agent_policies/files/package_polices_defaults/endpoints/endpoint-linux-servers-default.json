@@ -1,0 +1,10 @@
+{
+  "id": "endpoint-linux-servers-default",
+  "name": "endpoint (linux-servers-default)",
+  "namespace": "",
+  "policy_id": "linux-servers-default",
+  "package": {
+    "name": "endpoint",
+    "version": ""
+  }
+}

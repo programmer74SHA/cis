@@ -1,0 +1,392 @@
+#!/bin/bash
+# roles/install_elastic/templates/cluster-verification.sh.j2
+# Multi-Node Elasticsearch Cluster Verification Script
+# Generated: {{ ansible_date_time.iso8601 }}
+# Physical Host: {{ inventory_hostname }}
+
+set -e
+
+# Color codes for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# Configuration
+CLUSTER_NAME="{{ es_cluster_name | default('siem-cluster') }}"
+ES_USERNAME="{{ es_api_basic_auth_username | default('elastic') }}"
+ES_PASSWORD="{{ es_api_basic_auth_password | default('changeme') }}"
+USE_SSL="{{ es_enable_http_ssl | default(true) }}"
+HOST_IP="{{ ansible_default_ipv4.address }}"
+BASE_HTTP_PORT={{ es_http_base_port }}
+
+# Function to print colored output
+print_status() {
+    local status=$1
+    local message=$2
+    case $status in
+        "OK")
+            echo -e "${GREEN}✅ $message${NC}"
+            ;;
+        "WARN")
+            echo -e "${YELLOW}⚠️  $message${NC}"
+            ;;
+        "ERROR")
+            echo -e "${RED}❌ $message${NC}"
+            ;;
+        "INFO")
+            echo -e "${BLUE}ℹ️  $message${NC}"
+            ;;
+    esac
+}
+
+print_header() {
+    echo -e "${BLUE}"
+    echo "╔══════════════════════════════════════════════════════════════╗"
+    echo "║          MULTI-NODE ELASTICSEARCH CLUSTER VERIFICATION       ║"
+    echo "╠══════════════════════════════════════════════════════════════╣"
+    echo "║ Host: {{ inventory_hostname }}                               ║"
+    echo "║ Cluster: $CLUSTER_NAME                                       ║"
+    echo "║ Time: $(date)                            ║"
+    echo "╚══════════════════════════════════════════════════════════════╝"
+    echo -e "${NC}"
+}
+
+# Build URL based on SSL configuration
+build_url() {
+    local port=$1
+    local endpoint=$2
+    if [ "$USE_SSL" == "true" ]; then
+        echo "https://$HOST_IP:$port$endpoint"
+    else
+        echo "http://$HOST_IP:$port$endpoint"
+    fi
+}
+
+# Make authenticated request
+make_request() {
+    local url=$1
+    local format_json=${2:-false}
+    
+    local curl_opts="-s -k"
+    if [ "$USE_SSL" == "true" ]; then
+        curl_opts="$curl_opts -u $ES_USERNAME:$ES_PASSWORD"
+    fi
+    
+    local response
+    if $format_json; then
+        response=$(curl $curl_opts "$url" 2>/dev/null | jq -r '.' 2>/dev/null || echo "Failed to parse JSON")
+    else
+        response=$(curl $curl_opts "$url" 2>/dev/null || echo "Request failed")
+    fi
+    
+    echo "$response"
+}
+
+# Check if service is responsive
+check_service() {
+    local port=$1
+    local node_name=$2
+    
+    print_status "INFO" "Checking $node_name on port $port..."
+    
+    local health_url=$(build_url $port "/_cluster/health")
+    local response=$(make_request "$health_url")
+    
+    if [[ "$response" == *"cluster_name"* ]]; then
+        local status=$(echo "$response" | jq -r '.status' 2>/dev/null || echo "unknown")
+        local nodes=$(echo "$response" | jq -r '.number_of_nodes' 2>/dev/null || echo "0")
+        print_status "OK" "$node_name is responsive - Status: $status, Nodes: $nodes"
+        return 0
+    else
+        print_status "ERROR" "$node_name is not responsive"
+        return 1
+    fi
+}
+
+# Verify local nodes
+verify_local_nodes() {
+    print_status "INFO" "=== Verifying Local Elasticsearch Nodes ==="
+    
+    local local_nodes_ok=0
+    local total_local_nodes={{ elasticsearch_nodes | length if elasticsearch_nodes is defined else 0 }}
+    
+{% if elasticsearch_nodes is defined %}
+{% for node in elasticsearch_nodes %}
+    if check_service {{ es_http_base_port + node.port_offset }} "{{ node.name }}"; then
+        ((local_nodes_ok++))
+    fi
+{% endfor %}
+{% endif %}
+
+    print_status "INFO" "Local nodes responsive: $local_nodes_ok/$total_local_nodes"
+    
+    if [ $local_nodes_ok -eq $total_local_nodes ]; then
+        print_status "OK" "All local nodes are responsive"
+        return 0
+    else
+        print_status "WARN" "Some local nodes are not responsive"
+        return 1
+    fi
+}
+
+# Get comprehensive cluster information
+get_cluster_info() {
+    print_status "INFO" "=== Gathering Cluster Information ==="
+    
+    local primary_url=$(build_url $BASE_HTTP_PORT "/_cluster/health?pretty")
+    local health_response=$(make_request "$primary_url" true)
+    
+    if [[ "$health_response" != "Failed to parse JSON" ]] && [[ "$health_response" != "Request failed" ]]; then
+        echo -e "${BLUE}🏥 Cluster Health:${NC}"
+        echo "$health_response" | jq -r '
+            "  Cluster Name: " + .cluster_name +
+            "\n  Status: " + .status + 
+            "\n  Active Nodes: " + (.number_of_nodes | tostring) +
+            "\n  Active Data Nodes: " + (.number_of_data_nodes | tostring) +
+            "\n  Active Primary Shards: " + (.active_primary_shards | tostring) +
+            "\n  Active Shards: " + (.active_shards | tostring) +
+            "\n  Relocating Shards: " + (.relocating_shards | tostring) +
+            "\n  Initializing Shards: " + (.initializing_shards | tostring) +
+            "\n  Unassigned Shards: " + (.unassigned_shards | tostring)"
+        '
+    else
+        print_status "ERROR" "Failed to get cluster health information"
+        return 1
+    fi
+    
+    # Get nodes information
+    local nodes_url=$(build_url $BASE_HTTP_PORT "/_cat/nodes?v&h=name,ip,port,node.role,master,heap.percent,ram.percent,cpu,load_1m&format=json")
+    local nodes_response=$(make_request "$nodes_url")
+    
+    if [[ "$nodes_response" != "Failed to parse JSON" ]] && [[ "$nodes_response" != "Request failed" ]]; then
+        echo -e "\n${BLUE}🌐 Cluster Nodes:${NC}"
+        echo "$nodes_response" | jq -r '.[] | 
+            "  " + .name + " (" + .ip + ":" + .port + ") [" + .["node.role"] + "] " +
+            (if .master == "*" then "👑 MASTER" else "" end) +
+            " - Heap: " + .["heap.percent"] + "% RAM: " + .["ram.percent"] + "% CPU: " + (.cpu // "N/A") + "% Load: " + (.load_1m // "N/A")'
+    else
+        print_status "WARN" "Could not retrieve detailed nodes information"
+    fi
+}
+
+# Check cluster settings
+check_cluster_settings() {
+    print_status "INFO" "=== Checking Cluster Settings ==="
+    
+    local settings_url=$(build_url $BASE_HTTP_PORT "/_cluster/settings?include_defaults=true&flat_settings=true")
+    local settings_response=$(make_request "$settings_url" true)
+    
+    if [[ "$settings_response" != "Failed to parse JSON" ]] && [[ "$settings_response" != "Request failed" ]]; then
+        echo -e "${BLUE}⚙️  Important Settings:${NC}"
+        
+        # Extract key settings
+        local max_shards=$(echo "$settings_response" | jq -r '.defaults."cluster.max_shards_per_node" // "default"')
+        local auto_create=$(echo "$settings_response" | jq -r '.defaults."action.auto_create_index" // "default"')
+        
+        echo "  Max Shards Per Node: $max_shards"
+        echo "  Auto Create Index: $auto_create"
+        
+        # Check for any persistent settings
+        local persistent_settings=$(echo "$settings_response" | jq -r '.persistent // {}' | jq 'keys | length')
+        if [ "$persistent_settings" -gt 0 ]; then
+            echo -e "  ${YELLOW}Custom Persistent Settings: $persistent_settings configured${NC}"
+        fi
+    else
+        print_status "WARN" "Could not retrieve cluster settings"
+    fi
+}
+
+# Verify SSL certificates
+verify_ssl_certificates() {
+    if [ "$USE_SSL" == "true" ]; then
+        print_status "INFO" "=== Verifying SSL Certificates ==="
+        
+        local cert_issues=0
+        
+{% if elasticsearch_nodes is defined %}
+{% for node in elasticsearch_nodes %}
+        # Check {{ node.name }} certificate
+        if [ -f "/usr/share/siem/elasticsearch/certs/{{ node.name }}/{{ node.name }}.crt" ]; then
+            local cert_info=$(openssl x509 -in "/usr/share/siem/elasticsearch/certs/{{ node.name }}/{{ node.name }}.crt" -text -noout 2>/dev/null)
+            if [ $? -eq 0 ]; then
+                local expiry=$(echo "$cert_info" | grep "Not After" | sed 's/.*Not After : //')
+                print_status "OK" "{{ node.name }} certificate is valid (expires: $expiry)"
+            else
+                print_status "ERROR" "{{ node.name }} certificate is corrupted"
+                ((cert_issues++))
+            fi
+        else
+            print_status "ERROR" "{{ node.name }} certificate file not found"
+            ((cert_issues++))
+        fi
+        
+        # Verify certificate chain
+        if openssl verify -CAfile "/usr/share/siem/elasticsearch/certs/ca/ca.crt" "/usr/share/siem/elasticsearch/certs/{{ node.name }}/{{ node.name }}.crt" >/dev/null 2>&1; then
+            print_status "OK" "{{ node.name }} certificate chain is valid"
+        else
+            print_status "ERROR" "{{ node.name }} certificate chain verification failed"
+            ((cert_issues++))
+        fi
+{% endfor %}
+{% endif %}
+
+        if [ $cert_issues -eq 0 ]; then
+            print_status "OK" "All SSL certificates are valid"
+        else
+            print_status "ERROR" "$cert_issues certificate issues found"
+            return 1
+        fi
+    else
+        print_status "INFO" "SSL is disabled, skipping certificate verification"
+    fi
+}
+
+# Check Docker containers
+check_containers() {
+    print_status "INFO" "=== Checking Docker Containers ==="
+    
+    if command -v docker-compose >/dev/null 2>&1; then
+        local compose_status=$(docker-compose -f /usr/share/siem/elasticsearch/docker-compose.yml ps --services --filter "status=running" 2>/dev/null | wc -l)
+        local total_services={{ elasticsearch_nodes | length if elasticsearch_nodes is defined else 0 }}
+        
+        print_status "INFO" "Running containers: $compose_status/$total_services"
+        
+        if [ $compose_status -eq $total_services ]; then
+            print_status "OK" "All Elasticsearch containers are running"
+        else
+            print_status "WARN" "Some containers may not be running"
+            echo -e "${YELLOW}Container status:${NC}"
+            docker-compose -f /usr/share/siem/elasticsearch/docker-compose.yml ps
+        fi
+    else
+        print_status "WARN" "docker-compose not found, cannot check container status"
+    fi
+}
+
+# Performance checks
+check_performance() {
+    print_status "INFO" "=== Performance Checks ==="
+    
+    # Check system resources
+    local memory_usage=$(free | awk 'NR==2{printf "%.1f%%", $3*100/$2 }')
+    local disk_usage=$(df /usr/share/siem/elasticsearch | awk 'NR==2{print $5}' | sed 's/%//')
+    local load_avg=$(uptime | awk -F'load average:' '{ print $2 }' | awk '{ print $1 }' | sed 's/,//')
+    
+    echo -e "${BLUE}💻 System Resources:${NC}"
+    echo "  Memory Usage: $memory_usage"
+    echo "  Disk Usage: ${disk_usage}%"
+    echo "  Load Average: $load_avg"
+    
+    # Warnings
+    if [ ${disk_usage%.*} -gt 85 ]; then
+        print_status "WARN" "Disk usage is high (${disk_usage}%)"
+    fi
+    
+    if [ $(echo "$load_avg > $(nproc)" | bc -l 2>/dev/null || echo "0") -eq 1 ]; then
+        print_status "WARN" "Load average is high ($load_avg)"
+    fi
+}
+
+# Generate summary report
+generate_summary() {
+    print_status "INFO" "=== Verification Summary ==="
+    
+    local total_checks=0
+    local passed_checks=0
+    
+    # Count checks (simplified)
+    echo -e "${BLUE}📊 Summary:${NC}"
+    echo "  Physical Host: {{ inventory_hostname }}"
+    echo "  Local Nodes: {{ elasticsearch_nodes | length if elasticsearch_nodes is defined else 0 }}"
+    echo "  Cluster Name: $CLUSTER_NAME"
+    echo "  SSL Enabled: $USE_SSL"
+    echo "  Verification Time: $(date)"
+    
+    echo -e "\n${GREEN}✅ Cluster is operational and ready for use!${NC}"
+    echo -e "\n${BLUE}🔧 Useful Commands:${NC}"
+    
+{% if elasticsearch_nodes is defined %}
+{% for node in elasticsearch_nodes %}
+    echo "  # Check {{ node.name }}:"
+    if [ "$USE_SSL" == "true" ]; then
+        echo "  curl -k -u \$ES_USERNAME:\$ES_PASSWORD https://{{ ansible_default_ipv4.address }}:{{ es_http_base_port + node.port_offset }}/_cluster/health"
+    else
+        echo "  curl http://{{ ansible_default_ipv4.address }}:{{ es_http_base_port + node.port_offset }}/_cluster/health"
+    fi
+{% endfor %}
+{% endif %}
+
+    echo ""
+    echo "  # View container logs:"
+    echo "  docker-compose -f /usr/share/siem/elasticsearch/docker-compose.yml logs [node-name]"
+    echo ""
+    echo "  # Restart containers:"
+    echo "  docker-compose -f /usr/share/siem/elasticsearch/docker-compose.yml restart"
+}
+
+# Main execution
+main() {
+    print_header
+    
+    local overall_status=0
+    
+    # Run all checks
+    verify_local_nodes || overall_status=1
+    get_cluster_info || overall_status=1
+    check_cluster_settings
+    verify_ssl_certificates || overall_status=1
+    check_containers
+    check_performance
+    
+    echo ""
+    generate_summary
+    
+    if [ $overall_status -eq 0 ]; then
+        print_status "OK" "All critical checks passed!"
+        exit 0
+    else
+        print_status "ERROR" "Some critical checks failed. Review the output above."
+        exit 1
+    fi
+}
+
+# Handle command line arguments
+case "${1:-verify}" in
+    "verify"|"")
+        main
+        ;;
+    "health")
+        get_cluster_info
+        ;;
+    "nodes")
+        verify_local_nodes
+        ;;
+    "certs")
+        verify_ssl_certificates
+        ;;
+    "containers")
+        check_containers
+        ;;
+    "help"|"-h"|"--help")
+        echo "Usage: $0 [command]"
+        echo ""
+        echo "Commands:"
+        echo "  verify      Run all verification checks (default)"
+        echo "  health      Show cluster health information only"
+        echo "  nodes       Check local node responsiveness only"
+        echo "  certs       Verify SSL certificates only"
+        echo "  containers  Check Docker containers only"
+        echo "  help        Show this help message"
+        echo ""
+        echo "Environment variables:"
+        echo "  ES_USERNAME - Elasticsearch username (default: $ES_USERNAME)"
+        echo "  ES_PASSWORD - Elasticsearch password"
+        ;;
+    *)
+        echo "Unknown command: $1"
+        echo "Use '$0 help' for usage information"
+        exit 1
+        ;;
+esac

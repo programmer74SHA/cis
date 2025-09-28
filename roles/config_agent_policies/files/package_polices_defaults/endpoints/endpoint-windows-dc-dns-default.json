@@ -1,0 +1,10 @@
+{
+  "id": "endpoint-windows-dc-dns-default",
+  "name": "endpoint (windows-dc-dns-default)",
+  "namespace": "",
+  "policy_id": "windows-dc-dns-default",
+  "package": {
+    "name": "endpoint",
+    "version": ""
+  }
+}

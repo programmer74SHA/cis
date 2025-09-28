@@ -1,0 +1,9 @@
+- name: increase the size of the bash history
+  lineinfile:
+    path: ~/.bashrc
+    regexp: "^{{ item }}="
+    state: present 
+    line: "{{ item }}={{ bash_history_size }}"
+  with_items:
+    - "HISTSIZE"
+    - "HISTFILESIZE"

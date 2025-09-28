@@ -1,0 +1,53 @@
+---
+- name: "🚀 Kibana Docker Installation and Configuration"
+  block:
+    - name: Display Kibana installation banner
+      debug:
+        msg: |
+          ╔══════════════════════════════════════════════════════════════╗
+          ║              KIBANA DOCKER INSTALLATION STARTED              ║
+          ╠══════════════════════════════════════════════════════════════╣
+          ║ Host: {{ inventory_hostname }}                               ║
+          ║ IP: {{ ansible_default_ipv4.address }}                       ║
+          ║ Version: {{ kibana_version }}                                ║
+          ║ Time: {{ ansible_date_time.iso8601 }}                        ║
+          ╚══════════════════════════════════════════════════════════════╝
+
+    - name: "Install Kibana Docker"
+      import_tasks: install_kibana.yml
+
+    - name: "Create x509 certificate file"
+      import_tasks: create_x509_certificate_file.yml
+
+    - name: "Configure Kibana"
+      import_tasks: configure_kibana.yml
+
+    - name: "Start Kibana Service"
+      import_tasks: start_kibana_service.yml
+
+    - name: "Add geo IP files to BDA"
+      import_tasks: copy_geo_ip_files.yml
+
+    - name: Display installation completion
+      debug:
+        msg: |
+          ╔══════════════════════════════════════════════════════════════╗
+          ║                KIBANA INSTALLATION COMPLETED                 ║
+          ╠══════════════════════════════════════════════════════════════╣
+          ║ Host: {{ inventory_hostname }}                               ║
+          ║ Status: ✅ SUCCESS                                           ║
+          ║ Access: https://{{ ansible_default_ipv4.address }}:5601      ║
+          ║ Timestamp: {{ ansible_date_time.iso8601 }}                   ║
+          ╚══════════════════════════════════════════════════════════════╝
+      when: "'BDA' in group_names"
+
+  when: "'BDA' in group_names"
+  tags: [cluster, simple]
+
+- name: "Add new node to Kibana config"
+  import_tasks: config_kibana_new_node.yml
+  tags: new-node
+
+- name: "Update Kibana"
+  import_tasks: update.yml
+  tags: update

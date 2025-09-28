@@ -1,0 +1,382 @@
+---
+- name: "🚀 Multi-Node Elasticsearch Installation and Configuration"
+  block:
+    - name: Display installation banner
+      debug:
+        msg: |
+          ╔══════════════════════════════════════════════════════════════╗
+          ║         MULTI-NODE ELASTICSEARCH INSTALLATION STARTED        ║
+          ╠══════════════════════════════════════════════════════════════╣
+          ║ Physical Host: {{ inventory_hostname }}                      ║
+          ║ IP: {{ ansible_default_ipv4.address }}                       ║
+          ║ Nodes: {{ elasticsearch_nodes | length if elasticsearch_nodes is defined else 0 }}                                      ║
+          ║ Version: {{ es_version }}                                    ║
+          ║ Time: {{ ansible_date_time.iso8601 }}                        ║
+          ╚══════════════════════════════════════════════════════════════╝
+
+    # CRITICAL: Set variables FIRST before any other tasks
+    - name: Initialize cluster node discovery lists
+      block:
+        - name: Build comprehensive node list from all physical hosts
+          set_fact:
+            all_cluster_nodes: |
+              {%- set nodes = [] -%}
+              {%- for host_name, host_vars in hostvars.items() -%}
+                {%- if host_vars.elasticsearch_nodes is defined -%}
+                  {%- for node in host_vars.elasticsearch_nodes -%}
+                    {%- set node_info = {
+                      'name': node.name,
+                      'host': host_name,
+                      'ip': host_vars.ansible_default_ipv4.address,
+                      'roles': node.roles,
+                      'http_port': (es_http_base_port + node.port_offset),
+                      'transport_port': (es_transport_base_port + node.port_offset),
+                      'group_membership': node.group_membership | default([])
+                    } -%}
+                    {%- set _ = nodes.append(node_info) -%}
+                  {%- endfor -%}
+                {%- endif -%}
+              {%- endfor -%}
+              {{ nodes }}
+
+        - name: Extract master-eligible nodes for discovery
+          set_fact:
+            master_eligible_nodes: |
+              {%- set masters = [] -%}
+              {%- for node in all_cluster_nodes -%}
+                {%- if 'master' in node.roles or 'MASTER' in node.group_membership or 'BDA' in node.group_membership -%}
+                  {%- set _ = masters.append(node.ip + ':' + (node.transport_port | string)) -%}
+                {%- endif -%}
+              {%- endfor -%}
+              {{ masters | unique }}
+
+        - name: Set discovery seed hosts
+          set_fact:
+            elasticsearch_seed_hosts: "{{ master_eligible_nodes | join(',') }}"
+
+        - name: Set initial master nodes  
+          set_fact:
+            elasticsearch_master_nodes: "{{ master_eligible_nodes | join(',') }}"
+
+    # CRITICAL FIX: Always set elasticsearch_node_roles for template compatibility
+    - name: Set deployment type and node roles
+      block:
+        - name: Detect deployment type
+          set_fact:
+            is_multi_node_deployment: "{{ elasticsearch_nodes | length > 1 }}"
+            deployment_type: "{{ 'multi-node' if elasticsearch_nodes | length > 1 else 'single-node' }}"
+
+        # ALWAYS set elasticsearch_node_roles (required by templates)
+        - name: Set elasticsearch_node_roles for ALL deployments
+          set_fact:
+            elasticsearch_node_roles: "{{ elasticsearch_nodes[0].roles }}"
+          when: elasticsearch_nodes is defined and elasticsearch_nodes | length > 0
+
+        # Fallback if somehow elasticsearch_node_roles is still not set
+        - name: Ensure elasticsearch_node_roles fallback
+          set_fact:
+            elasticsearch_node_roles: ['data']
+          when: elasticsearch_node_roles is not defined
+
+        - name: Display deployment configuration
+          debug:
+            msg: |
+              📋 Deployment Configuration:
+              ==========================
+              Type: {{ deployment_type }}
+              Nodes on this host: {{ elasticsearch_nodes | length }}
+              Multi-node deployment: {{ is_multi_node_deployment }}
+              Primary node roles: {{ elasticsearch_node_roles }}
+
+    # Only proceed if this host has Elasticsearch nodes defined
+    - name: Check if host has Elasticsearch nodes
+      set_fact:
+        has_elasticsearch_nodes: "{{ 
+          hostvars[inventory_hostname].elasticsearch_nodes is defined and 
+          hostvars[inventory_hostname].elasticsearch_nodes | length > 0 }}"
+
+    - name: Debug host elasticsearch configuration
+      debug:
+        msg: |
+          🔍 Host Configuration Debug:
+          ===========================
+          Host: {{ inventory_hostname }}
+          Groups: {{ group_names }}
+          Has elasticsearch_nodes defined: {{ hostvars[inventory_hostname].elasticsearch_nodes is defined }}
+          Node count: {{ hostvars[inventory_hostname].elasticsearch_nodes | length if hostvars[inventory_hostname].elasticsearch_nodes is defined else 0 }}
+          Will deploy Elasticsearch: {{ has_elasticsearch_nodes }}
+          Service type: {{ hostvars[inventory_hostname].get('service_type', 'elasticsearch') }}
+
+    - name: Skip non-Elasticsearch hosts
+      debug:
+        msg: "Host {{ inventory_hostname }} has no Elasticsearch nodes defined. Skipping Elasticsearch installation."
+      when: not has_elasticsearch_nodes
+
+    - name: Skip load balancer hosts  
+      debug:
+        msg: "Host {{ inventory_hostname }} is a load balancer. Skipping Elasticsearch installation."
+      when: hostvars[inventory_hostname].get('service_type', 'elasticsearch') == 'load_balancer'
+
+    - name: Install Elasticsearch on multi-node host
+      block:
+        - name: Ensure required variables are set
+          assert:
+            that:
+              - elasticsearch_nodes is defined
+              - elasticsearch_nodes | length > 0
+              - ansible_default_ipv4.address is defined
+            fail_msg: "Required variables missing on {{ inventory_hostname }}"
+
+        - name: Configure system for Elasticsearch Docker
+          import_tasks: system-config.yml
+
+        - name: Create base directories for all nodes
+          file:
+            path: "{{ item }}"
+            state: directory
+            owner: "1000"
+            group: "1000"
+            mode: "0755"
+          loop:
+            - "/usr/share/siem/elasticsearch"
+            - "/usr/share/siem/elasticsearch/shared-config"
+            - "/usr/share/siem/elasticsearch/certs"
+
+        - name: Create node-specific directories
+          file:
+            path: "{{ directory_path }}"
+            state: directory
+            owner: "1000"
+            group: "1000"
+            mode: "0755"
+          with_nested:
+            - "{{ elasticsearch_nodes | selectattr('name', 'defined') | list }}"
+            - - data
+              - logs
+              - config
+          vars:
+            current_node: "{{ item[0] }}"
+            dir_type: "{{ item[1] }}"
+            directory_path: "/usr/share/siem/elasticsearch/{{ current_node.name }}/{{ dir_type }}"
+          loop_control:
+            label: "{{ current_node.name }}/{{ dir_type }}"
+          when: 
+            - current_node is defined
+            - current_node.name is defined
+
+        - name: Setup SSL certificates for all nodes
+          import_tasks: elasticsearch-ssl-multinode.yml
+          when: es_enable_http_ssl | default(true) or es_enable_transport_ssl | default(true)
+
+        # MULTI-NODE DEPLOYMENT PATH
+        - name: Multi-node deployment configuration
+          block:
+            - name: Generate node-specific configurations
+              template:
+                src: elasticsearch-multinode.yml.j2
+                dest: "/usr/share/siem/elasticsearch/{{ node.name }}/config/elasticsearch.yml"
+                owner: "1000"
+                group: "1000"
+                mode: "0644"
+              loop: "{{ elasticsearch_nodes }}"
+              loop_control:
+                loop_var: node
+                label: "{{ node.name }}"
+              register: node_configs
+
+            - name: Generate JVM options for each node
+              template:
+                src: jvm-multinode.options.j2
+                dest: "/usr/share/siem/elasticsearch/{{ node.name }}/config/jvm.options"
+                owner: "1000"
+                group: "1000" 
+                mode: "0644"
+              loop: "{{ elasticsearch_nodes }}"
+              loop_control:
+                loop_var: node
+                label: "{{ node.name }}"
+
+          when: is_multi_node_deployment
+
+        # SINGLE-NODE DEPLOYMENT PATH
+        - name: Single-node deployment configuration
+          block:
+            - name: Generate single-node configuration
+              template:
+                src: elasticsearch-multinode.yml.j2
+                dest: "/usr/share/siem/elasticsearch/{{ elasticsearch_nodes[0].name }}/config/elasticsearch.yml"
+                owner: "1000"
+                group: "1000"
+                mode: "0644"
+              vars:
+                node: "{{ elasticsearch_nodes[0] }}"
+              register: single_node_config
+
+            - name: Generate single-node JVM options
+              template:
+                src: jvm.options.j2
+                dest: "/usr/share/siem/elasticsearch/{{ elasticsearch_nodes[0].name }}/config/jvm.options"
+                owner: "1000"
+                group: "1000"
+                mode: "0644"
+
+            - name: Set node_configs for consistency
+              set_fact:
+                node_configs:
+                  results:
+                    - changed: "{{ single_node_config.changed }}"
+
+          when: not is_multi_node_deployment
+
+        # ALWAYS GENERATE DOCKER-COMPOSE FILE - FIXED TO RUN ON ALL HOSTS
+        - name: Generate Docker Compose file for ALL hosts with Elasticsearch nodes
+          template:
+            src: docker-compose-multinode.yml.j2
+            dest: "/usr/share/siem/elasticsearch/docker-compose.yml"
+            mode: "0644"
+            owner: root
+            group: root
+          register: compose_config
+
+        - name: Verify docker-compose file exists
+          stat:
+            path: "/usr/share/siem/elasticsearch/docker-compose.yml"
+          register: compose_file_check
+          failed_when: not compose_file_check.stat.exists
+
+        - name: Display docker-compose file status
+          debug:
+            msg: |
+              ✅ Docker-compose file status on {{ inventory_hostname }}:
+              - File exists: {{ compose_file_check.stat.exists }}
+              - File size: {{ compose_file_check.stat.size }} bytes
+              - Generated: {{ compose_config.changed }}
+
+        - name: Deploy Docker image and containers
+          import_tasks: elasticsearch-docker-deploy.yml
+
+        - name: Stop existing containers if config changed
+          shell: |
+            cd /usr/share/siem/elasticsearch
+            docker-compose down
+          when: compose_config.changed or (node_configs.results | selectattr('changed') | list | length > 0)
+          ignore_errors: true
+
+        - name: Deploy Elasticsearch cluster
+          shell: |
+            cd /usr/share/siem/elasticsearch
+            docker-compose up -d
+          register: deployment_result
+
+        # - name: Wait for all nodes to be ready
+        #   uri:
+        #     url: "{{ 'https' if es_enable_http_ssl | default(true) else 'http' }}://{{ ansible_default_ipv4.address }}:{{ es_http_base_port + node.port_offset }}/_cluster/health"
+        #     method: GET
+        #     user: "{{ es_api_basic_auth_username | default('elastic') if es_enable_http_ssl | default(true) else omit }}"
+        #     password: "{{ es_api_basic_auth_password if es_enable_http_ssl | default(true) else omit }}"
+        #     force_basic_auth: "{{ es_enable_http_ssl | default(true) }}"
+        #     validate_certs: no
+        #     status_code: [200, 401]
+        #     timeout: 30
+        #   loop: "{{ elasticsearch_nodes }}"
+        #   loop_control:
+        #     loop_var: node
+        #     label: "{{ node.name }}"
+        #   register: health_checks
+        #   until: health_checks.status in [200, 401]
+        #   retries: 20
+        #   delay: 15
+        #   when: es_api_basic_auth_password is defined
+        #   ignore_errors: true
+
+      when: has_elasticsearch_nodes
+
+  when: 
+    - inventory_hostname not in groups.get('LB', [])
+    - hostvars[inventory_hostname].get('service_type', 'elasticsearch') != 'load_balancer'
+  tags: [cluster, simple, multi-node]
+
+
+# Add this to the end of your main.yml (before the completion message)
+
+- name: Quick container health check with timeout
+  block:
+    - name: Check containers are running
+      shell: |
+        cd /usr/share/siem/elasticsearch
+        docker-compose ps --format table
+      register: container_status
+      changed_when: false
+
+    - name: Simple connectivity test
+      wait_for:
+        host: "{{ ansible_default_ipv4.address }}"
+        port: "{{ es_http_base_port + node.port_offset }}"
+        timeout: 30
+      loop: "{{ elasticsearch_nodes }}"
+      loop_control:
+        loop_var: node
+      ignore_errors: true
+
+    - name: Basic Elasticsearch API test (with short timeout)
+      uri:
+        url: "{{ 'https' if es_enable_http_ssl | default(true) else 'http' }}://{{ ansible_default_ipv4.address }}:{{ es_http_base_port + node.port_offset }}/"
+        method: GET
+        user: "{{ es_api_basic_auth_username | default('elastic') if es_enable_http_ssl | default(true) else omit }}"
+        password: "{{ es_api_basic_auth_password if es_enable_http_ssl | default(true) else omit }}"
+        force_basic_auth: "{{ es_enable_http_ssl | default(true) }}"
+        validate_certs: no
+        timeout: 10
+        status_code: [200, 401]
+      loop: "{{ elasticsearch_nodes }}"
+      loop_control:
+        loop_var: node
+      register: quick_health_check
+      until: quick_health_check.status in [200, 401]
+      retries: 3
+      delay: 5
+      ignore_errors: true
+
+    - name: Display health check results
+      debug:
+        msg: |
+          Container Status: {{ container_status.stdout }}
+          
+          Quick Health Check Results:
+          {% for result in quick_health_check.results %}
+          - {{ result.node.name }}: {{ 'OK' if result.status in [200, 401] else 'FAILED' }}
+          {% endfor %}
+
+  rescue:
+    - name: Show container logs on failure
+      shell: |
+        cd /usr/share/siem/elasticsearch
+        echo "=== Container Logs ==="
+        docker-compose logs --tail=50
+      register: error_logs
+
+    - name: Display error information
+      debug:
+        msg: |
+          Health check failed. Container logs:
+          {{ error_logs.stdout }}
+          
+          Manual troubleshooting:
+          1. ssh {{ inventory_hostname }}
+          2. cd /usr/share/siem/elasticsearch
+          3. docker-compose ps
+          4. docker-compose logs [service-name]
+
+
+- name: Display completion message
+  debug:
+    msg: |
+      ╔══════════════════════════════════════════════════════════════╗
+      ║                    ELASTICSEARCH INSTALLATION COMPLETED      ║
+      ╠══════════════════════════════════════════════════════════════╣
+      ║ Host: {{ inventory_hostname }}                               ║
+      ║ Nodes Deployed: {{ elasticsearch_nodes | length if elasticsearch_nodes is defined else 0 }}                                  ║
+      ║ Timestamp: {{ ansible_date_time.iso8601 }}                   ║
+      ║ Status: ✅ SUCCESS                                           ║
+      ╚══════════════════════════════════════════════════════════════╝
+  tags: [cluster, simple, multi-node]

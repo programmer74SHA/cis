@@ -1,0 +1,24 @@
+---
+- name: "Download elastic agent in all hosts"
+  command: "wget  http://{{ hostvars[groups['SF'][0]]['ansible_default_ipv4']['address'] }}:{{ elastic_agent_port }}/{{ elastic_agent_download_file_url }} -O {{ elastic_agent_download_dir }}/{{ elastic_agent_download_file_name }} -q"
+  args:
+    chdir: "{{ elastic_agent_download_dir }}"
+
+
+- name: "Extract elastic agent" 
+  command: "tar -xzf {{ elastic_agent_download_dir }}/{{ elastic_agent_download_file_name }}"
+  args:
+    chdir: "{{ elastic_agent_download_dir }}"
+
+- name: "Run this tasks only on SF server"
+  block:
+    - name: "Make sure target directory exist"
+      file:
+        path: "/etc/elasticsearch/certs"
+        state: directory
+        mode: '0755'
+    - name: "Copy fleet server certificate to SF"
+      copy:
+        src: /etc/elasticsearch/certs/fleet-server
+        dest: /etc/elasticsearch/certs
+  when: "'SF' in group_names"

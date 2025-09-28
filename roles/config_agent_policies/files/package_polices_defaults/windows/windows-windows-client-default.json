@@ -1,0 +1,870 @@
+{
+  "id": "windows-windows-client-default",
+  "name": "windows (windows-client-default)",
+  "namespace": "",
+  "policy_id": "windows-client-default",
+  "enabled": true,
+  "package": {
+    "name": "windows",
+    "version": ""
+  },
+  "inputs": [
+    {
+      "type": "winlog",
+      "policy_template": "windows",
+      "enabled": true,
+      "streams": [
+        {
+          "enabled": true,
+          "data_stream": {
+            "type": "logs",
+            "dataset": "windows.applocker_exe_and_dll"
+          },
+          "vars": {
+            "preserve_original_event": {
+              "type": "bool",
+              "value": true
+            },
+            "event_id": {
+              "value": null,
+              "type": "text"
+            },
+            "ignore_older": {
+              "value": "72h",
+              "type": "text"
+            },
+            "language": {
+              "value": 0,
+              "type": "text"
+            },
+            "tags": {
+              "value": [],
+              "type": "text"
+            },
+            "processors": {
+              "type": "yaml"
+            },
+            "custom": {
+              "value": "# Winlog configuration example\n  #batch_read_size: 100",
+              "type": "yaml"
+            }
+          },
+          "compiled_stream": {
+            "name": "Microsoft-Windows-AppLocker/EXE and DLL",
+            "condition": "${host.platform} == 'windows'",
+            "ignore_older": "72h",
+            "tags": [
+              "preserve_original_event"
+            ],
+            "include_xml": true,
+            "processors": [
+              {
+                "translate_sid": {
+                  "field": "winlog.event_data.MemberSid",
+                  "account_name_target": "winlog.event_data._MemberUserName",
+                  "domain_target": "winlog.event_data._MemberDomain",
+                  "account_type_target": "winlog.event_data._MemberAccountType",
+                  "ignore_missing": true,
+                  "ignore_failure": true
+                }
+              }
+            ]
+          }
+        },
+        {
+          "enabled": true,
+          "data_stream": {
+            "type": "logs",
+            "dataset": "windows.applocker_msi_and_script"
+          },
+          "vars": {
+            "preserve_original_event": {
+              "type": "bool",
+              "value": true
+            },
+            "event_id": {
+              "value": null,
+              "type": "text"
+            },
+            "ignore_older": {
+              "value": "72h",
+              "type": "text"
+            },
+            "language": {
+              "value": 0,
+              "type": "text"
+            },
+            "tags": {
+              "value": [],
+              "type": "text"
+            },
+            "processors": {
+              "type": "yaml"
+            },
+            "custom": {
+              "value": "# Winlog configuration example\n  #batch_read_size: 100",
+              "type": "yaml"
+            }
+          },
+          "compiled_stream": {
+            "name": "Microsoft-Windows-AppLocker/MSI and Script",
+            "condition": "${host.platform} == 'windows'",
+            "ignore_older": "72h",
+            "tags": [
+              "preserve_original_event"
+            ],
+            "include_xml": true,
+            "processors": [
+              {
+                "translate_sid": {
+                  "field": "winlog.event_data.MemberSid",
+                  "account_name_target": "winlog.event_data._MemberUserName",
+                  "domain_target": "winlog.event_data._MemberDomain",
+                  "account_type_target": "winlog.event_data._MemberAccountType",
+                  "ignore_missing": true,
+                  "ignore_failure": true
+                }
+              }
+            ]
+          }
+        },
+        {
+          "enabled": true,
+          "data_stream": {
+            "type": "logs",
+            "dataset": "windows.applocker_packaged_app_deployment"
+          },
+          "vars": {
+            "preserve_original_event": {
+              "type": "bool",
+              "value": true
+            },
+            "event_id": {
+              "value": null,
+              "type": "text"
+            },
+            "ignore_older": {
+              "value": "72h",
+              "type": "text"
+            },
+            "language": {
+              "value": 0,
+              "type": "text"
+            },
+            "tags": {
+              "value": [],
+              "type": "text"
+            },
+            "processors": {
+              "type": "yaml"
+            },
+            "custom": {
+              "value": "# Winlog configuration example\n  #batch_read_size: 100",
+              "type": "yaml"
+            }
+          },
+          "compiled_stream": {
+            "name": "Microsoft-Windows-AppLocker/Packaged app-Deployment",
+            "condition": "${host.platform} == 'windows'",
+            "ignore_older": "72h",
+            "tags": [
+              "preserve_original_event"
+            ],
+            "include_xml": true,
+            "processors": [
+              {
+                "translate_sid": {
+                  "field": "winlog.event_data.MemberSid",
+                  "account_name_target": "winlog.event_data._MemberUserName",
+                  "domain_target": "winlog.event_data._MemberDomain",
+                  "account_type_target": "winlog.event_data._MemberAccountType",
+                  "ignore_missing": true,
+                  "ignore_failure": true
+                }
+              }
+            ]
+          }
+        },
+        {
+          "enabled": true,
+          "data_stream": {
+            "type": "logs",
+            "dataset": "windows.applocker_packaged_app_execution"
+          },
+          "vars": {
+            "preserve_original_event": {
+              "type": "bool",
+              "value": true
+            },
+            "event_id": {
+              "value": null,
+              "type": "text"
+            },
+            "ignore_older": {
+              "value": "72h",
+              "type": "text"
+            },
+            "language": {
+              "value": 0,
+              "type": "text"
+            },
+            "tags": {
+              "value": [],
+              "type": "text"
+            },
+            "processors": {
+              "type": "yaml"
+            },
+            "custom": {
+              "value": "# Winlog configuration example\n  #batch_read_size: 100",
+              "type": "yaml"
+            }
+          },
+          "compiled_stream": {
+            "name": "Microsoft-Windows-AppLocker/Packaged app-Execution",
+            "condition": "${host.platform} == 'windows'",
+            "ignore_older": "72h",
+            "tags": [
+              "preserve_original_event"
+            ],
+            "include_xml": true,
+            "processors": [
+              {
+                "translate_sid": {
+                  "field": "winlog.event_data.MemberSid",
+                  "account_name_target": "winlog.event_data._MemberUserName",
+                  "domain_target": "winlog.event_data._MemberDomain",
+                  "account_type_target": "winlog.event_data._MemberAccountType",
+                  "ignore_missing": true,
+                  "ignore_failure": true
+                }
+              }
+            ]
+          }
+        },
+        {
+          "enabled": false,
+          "data_stream": {
+            "type": "logs",
+            "dataset": "windows.forwarded"
+          },
+          "vars": {
+            "preserve_original_event": {
+              "type": "bool",
+              "value": false
+            },
+            "event_id": {
+              "type": "text"
+            },
+            "ignore_older": {
+              "value": "72h",
+              "type": "text"
+            },
+            "language": {
+              "value": 0,
+              "type": "text"
+            },
+            "tags": {
+              "value": [
+                "forwarded"
+              ],
+              "type": "text"
+            },
+            "processors": {
+              "type": "yaml"
+            },
+            "custom": {
+              "value": "# Winlog configuration example\n  #batch_read_size: 100",
+              "type": "yaml"
+            }
+          }
+        },
+        {
+          "enabled": true,
+          "data_stream": {
+            "type": "logs",
+            "dataset": "windows.powershell"
+          },
+          "vars": {
+            "preserve_original_event": {
+              "value": true,
+              "type": "bool"
+            },
+            "event_id": {
+              "value": "400, 403, 600, 800",
+              "type": "text"
+            },
+            "ignore_older": {
+              "value": "72h",
+              "type": "text"
+            },
+            "language": {
+              "value": 0,
+              "type": "text"
+            },
+            "tags": {
+              "value": [],
+              "type": "text"
+            },
+            "processors": {
+              "type": "yaml"
+            },
+            "custom": {
+              "value": "# Winlog configuration example\n  #batch_read_size: 100",
+              "type": "yaml"
+            }
+          },
+          "compiled_stream": {
+            "name": "Windows PowerShell",
+            "condition": "${host.platform} == 'windows'",
+            "event_id": "400, 403, 600, 800",
+            "ignore_older": "72h",
+            "processors": [
+              {
+                "translate_sid": {
+                  "field": "winlog.event_data.MemberSid",
+                  "account_name_target": "winlog.event_data._MemberUserName",
+                  "domain_target": "winlog.event_data._MemberDomain",
+                  "account_type_target": "winlog.event_data._MemberAccountType",
+                  "ignore_missing": true,
+                  "ignore_failure": true
+                }
+              }
+            ]
+          }
+        },
+        {
+          "enabled": true,
+          "data_stream": {
+            "type": "logs",
+            "dataset": "windows.powershell_operational"
+          },
+          "vars": {
+            "preserve_original_event": {
+              "value": true,
+              "type": "bool"
+            },
+            "event_id": {
+              "value": "4103, 4104, 4105, 4106",
+              "type": "text"
+            },
+            "ignore_older": {
+              "value": "72h",
+              "type": "text"
+            },
+            "language": {
+              "value": 0,
+              "type": "text"
+            },
+            "tags": {
+              "value": [],
+              "type": "text"
+            },
+            "processors": {
+              "type": "yaml"
+            },
+            "custom": {
+              "value": "# Winlog configuration example\n  #batch_read_size: 100",
+              "type": "yaml"
+            }
+          },
+          "compiled_stream": {
+            "name": "Microsoft-Windows-PowerShell/Operational",
+            "condition": "${host.platform} == 'windows'",
+            "event_id": "4103, 4104, 4105, 4106",
+            "ignore_older": "72h",
+            "processors": [
+              {
+                "translate_sid": {
+                  "field": "winlog.event_data.MemberSid",
+                  "account_name_target": "winlog.event_data._MemberUserName",
+                  "domain_target": "winlog.event_data._MemberDomain",
+                  "account_type_target": "winlog.event_data._MemberAccountType",
+                  "ignore_missing": true,
+                  "ignore_failure": true
+                }
+              }
+            ]
+          }
+        },
+        {
+          "enabled": true,
+          "data_stream": {
+            "type": "logs",
+            "dataset": "windows.sysmon_operational"
+          },
+          "vars": {
+            "preserve_original_event": {
+              "value": true,
+              "type": "bool"
+            },
+            "event_id": {
+              "type": "text"
+            },
+            "ignore_older": {
+              "value": "72h",
+              "type": "text"
+            },
+            "language": {
+              "value": 0,
+              "type": "text"
+            },
+            "tags": {
+              "value": [],
+              "type": "text"
+            },
+            "processors": {
+              "type": "yaml"
+            },
+            "custom": {
+              "value": "# Winlog configuration example\n  #batch_read_size: 100",
+              "type": "yaml"
+            }
+          },
+          "compiled_stream": {
+            "name": "Microsoft-Windows-Sysmon/Operational",
+            "condition": "${host.platform} == 'windows'",
+            "ignore_older": "72h",
+            "processors": [
+              {
+                "translate_sid": {
+                  "field": "winlog.event_data.MemberSid",
+                  "account_name_target": "winlog.event_data._MemberUserName",
+                  "domain_target": "winlog.event_data._MemberDomain",
+                  "account_type_target": "winlog.event_data._MemberAccountType",
+                  "ignore_missing": true,
+                  "ignore_failure": true
+                }
+              }
+            ]
+          }
+        },
+        {
+          "enabled": true,
+          "data_stream": {
+            "type": "logs",
+            "dataset": "windows.windows_defender"
+          },
+          "vars": {
+            "preserve_original_event": {
+              "type": "bool",
+              "value": true
+            },
+            "event_id": {
+              "value": null,
+              "type": "text"
+            },
+            "ignore_older": {
+              "value": "72h",
+              "type": "text"
+            },
+            "language": {
+              "value": 0,
+              "type": "text"
+            },
+            "tags": {
+              "value": [],
+              "type": "text"
+            },
+            "processors": {
+              "type": "yaml"
+            },
+            "custom": {
+              "value": "# Winlog configuration example\n  #batch_read_size: 100",
+              "type": "yaml"
+            }
+          },
+          "compiled_stream": {
+            "name": "Microsoft-Windows-Windows Defender/Operational",
+            "condition": "${host.platform} == 'windows'",
+            "ignore_older": "72h",
+            "include_xml": true,
+            "tags": [
+              "preserve_original_event"
+            ],
+            "processors": [
+              {
+                "translate_sid": {
+                  "field": "winlog.event_data.MemberSid",
+                  "account_name_target": "winlog.event_data._MemberUserName",
+                  "domain_target": "winlog.event_data._MemberDomain",
+                  "account_type_target": "winlog.event_data._MemberAccountType",
+                  "ignore_missing": true,
+                  "ignore_failure": true
+                }
+              },
+              {
+                "script": {
+                  "lang": "javascript",
+                  "id": "rename_fields_in_winlog_event_data_that_have_spaces",
+                  "source": "function process(event) {\n    var eventData = event.Get(\"winlog.event_data\");\n    if (eventData !== null) {\n      var newEventData = {};\n      for (var key in eventData) {\n        if (eventData.hasOwnProperty(key)) {\n          var newKey = key.replace(/ /g, \"_\");\n          newEventData[newKey] = eventData[key];\n        }\n      }\n      event.Put(\"winlog.event_data\", newEventData);\n    }\n  }"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "type": "windows/metrics",
+      "policy_template": "windows",
+      "enabled": true,
+      "streams": [
+        {
+          "enabled": false,
+          "data_stream": {
+            "type": "metrics",
+            "dataset": "windows.perfmon"
+          },
+          "vars": {
+            "perfmon.group_measurements_by_instance": {
+              "value": false,
+              "type": "bool"
+            },
+            "perfmon.ignore_non_existent_counters": {
+              "value": false,
+              "type": "bool"
+            },
+            "perfmon.refresh_wildcard_counters": {
+              "value": false,
+              "type": "bool"
+            },
+            "perfmon.queries": {
+              "value": "- object: 'Process'\n  instance: [\"*\"]\n  counters:\n    - name: '% Processor Time'\n      field: cpu_perc\n      format: \"float\"\n    - name: \"Working Set\"",
+              "type": "yaml"
+            },
+            "period": {
+              "value": "10s",
+              "type": "text"
+            },
+            "processors": {
+              "type": "yaml"
+            }
+          }
+        },
+        {
+          "enabled": true,
+          "data_stream": {
+            "type": "metrics",
+            "dataset": "windows.service"
+          },
+          "vars": {
+            "period": {
+              "type": "text",
+              "value": "300s"
+            },
+            "processors": {
+              "type": "yaml"
+            }
+          },
+          "compiled_stream": {
+            "metricsets": [
+              "service"
+            ],
+            "condition": "${host.platform} == 'windows'",
+            "period": "300s"
+          }
+        }
+      ]
+    },
+    {
+      "type": "httpjson",
+      "policy_template": "windows",
+      "enabled": false,
+      "streams": [
+        {
+          "enabled": false,
+          "data_stream": {
+            "type": "logs",
+            "dataset": "windows.applocker_exe_and_dll"
+          },
+          "vars": {
+            "interval": {
+              "value": "10s",
+              "type": "text"
+            },
+            "search": {
+              "value": "search sourcetype=\"XmlWinEventLog:Microsoft-Windows-AppLocker/EXE and DLL\"",
+              "type": "text"
+            },
+            "tags": {
+              "value": [
+                "forwarded"
+              ],
+              "type": "text"
+            },
+            "preserve_original_event": {
+              "value": false,
+              "type": "bool"
+            },
+            "processors": {
+              "type": "yaml"
+            }
+          }
+        },
+        {
+          "enabled": false,
+          "data_stream": {
+            "type": "logs",
+            "dataset": "windows.applocker_msi_and_script"
+          },
+          "vars": {
+            "interval": {
+              "value": "10s",
+              "type": "text"
+            },
+            "search": {
+              "value": "search sourcetype=\"XmlWinEventLog:Microsoft-Windows-AppLocker/MSI and Script\"",
+              "type": "text"
+            },
+            "tags": {
+              "value": [
+                "forwarded"
+              ],
+              "type": "text"
+            },
+            "preserve_original_event": {
+              "value": false,
+              "type": "bool"
+            },
+            "processors": {
+              "type": "yaml"
+            }
+          }
+        },
+        {
+          "enabled": false,
+          "data_stream": {
+            "type": "logs",
+            "dataset": "windows.applocker_packaged_app_deployment"
+          },
+          "vars": {
+            "interval": {
+              "value": "10s",
+              "type": "text"
+            },
+            "search": {
+              "value": "search sourcetype=\"XmlWinEventLog:Microsoft-Windows-AppLocker/Packaged app-Deployment\"",
+              "type": "text"
+            },
+            "tags": {
+              "value": [
+                "forwarded"
+              ],
+              "type": "text"
+            },
+            "preserve_original_event": {
+              "value": false,
+              "type": "bool"
+            },
+            "processors": {
+              "type": "yaml"
+            }
+          }
+        },
+        {
+          "enabled": false,
+          "data_stream": {
+            "type": "logs",
+            "dataset": "windows.applocker_packaged_app_execution"
+          },
+          "vars": {
+            "interval": {
+              "value": "10s",
+              "type": "text"
+            },
+            "search": {
+              "value": "search sourcetype=\"XmlWinEventLog:Microsoft-Windows-AppLocker/Packaged app-Execution\"",
+              "type": "text"
+            },
+            "tags": {
+              "value": [
+                "forwarded"
+              ],
+              "type": "text"
+            },
+            "preserve_original_event": {
+              "value": false,
+              "type": "bool"
+            },
+            "processors": {
+              "type": "yaml"
+            }
+          }
+        },
+        {
+          "enabled": false,
+          "data_stream": {
+            "type": "logs",
+            "dataset": "windows.forwarded"
+          },
+          "vars": {
+            "interval": {
+              "value": "10s",
+              "type": "text"
+            },
+            "search": {
+              "value": "search sourcetype=\"XmlWinEventLog:ForwardedEvents\"",
+              "type": "text"
+            },
+            "tags": {
+              "value": [
+                "forwarded"
+              ],
+              "type": "text"
+            },
+            "preserve_original_event": {
+              "value": false,
+              "type": "bool"
+            },
+            "processors": {
+              "type": "yaml"
+            }
+          }
+        },
+        {
+          "enabled": false,
+          "data_stream": {
+            "type": "logs",
+            "dataset": "windows.powershell"
+          },
+          "vars": {
+            "interval": {
+              "value": "10s",
+              "type": "text"
+            },
+            "search": {
+              "value": "search sourcetype=\"XmlWinEventLog:Windows PowerShell\"",
+              "type": "text"
+            },
+            "tags": {
+              "value": [
+                "forwarded"
+              ],
+              "type": "text"
+            },
+            "preserve_original_event": {
+              "value": false,
+              "type": "bool"
+            },
+            "processors": {
+              "type": "yaml"
+            }
+          }
+        },
+        {
+          "enabled": false,
+          "data_stream": {
+            "type": "logs",
+            "dataset": "windows.powershell_operational"
+          },
+          "vars": {
+            "interval": {
+              "value": "10s",
+              "type": "text"
+            },
+            "search": {
+              "value": "search sourcetype=\"XmlWinEventLog:Microsoft-Windows-Powershell/Operational\"",
+              "type": "text"
+            },
+            "tags": {
+              "value": [
+                "forwarded"
+              ],
+              "type": "text"
+            },
+            "preserve_original_event": {
+              "value": false,
+              "type": "bool"
+            },
+            "processors": {
+              "type": "yaml"
+            }
+          }
+        },
+        {
+          "enabled": false,
+          "data_stream": {
+            "type": "logs",
+            "dataset": "windows.sysmon_operational"
+          },
+          "vars": {
+            "interval": {
+              "value": "10s",
+              "type": "text"
+            },
+            "search": {
+              "value": "search sourcetype=\"XmlWinEventLog:Microsoft-Windows-Sysmon/Operational\"",
+              "type": "text"
+            },
+            "tags": {
+              "value": [
+                "forwarded"
+              ],
+              "type": "text"
+            },
+            "preserve_original_event": {
+              "value": false,
+              "type": "bool"
+            },
+            "processors": {
+              "type": "yaml"
+            }
+          }
+        },
+        {
+          "enabled": false,
+          "data_stream": {
+            "type": "logs",
+            "dataset": "windows.windows_defender"
+          },
+          "vars": {
+            "interval": {
+              "value": "10s",
+              "type": "text"
+            },
+            "search": {
+              "value": "search sourcetype=\"XmlWinEventLog:Microsoft-Windows-Windows Defender/Operational\"",
+              "type": "text"
+            },
+            "tags": {
+              "value": [
+                "forwarded"
+              ],
+              "type": "text"
+            },
+            "preserve_original_event": {
+              "value": false,
+              "type": "bool"
+            },
+            "processors": {
+              "type": "yaml"
+            }
+          }
+        }
+      ],
+      "vars": {
+        "url": {
+          "value": "https://server.example.com:8089",
+          "type": "text"
+        },
+        "enable_request_tracer": {
+          "type": "bool"
+        },
+        "username": {
+          "type": "text"
+        },
+        "password": {
+          "type": "password"
+        },
+        "token": {
+          "type": "password"
+        },
+        "ssl": {
+          "value": "#certificate_authorities:\n  #  - |\n  #    -----BEGIN CERTIFICATE-----\n  #    MIIDCjCCAfKgAwIBAgITJ706Mu2wJlKckpIvkWxEHvEyijANBgkqhkiG9w0BAQsF\n  #    ADAUMRIwEAYDVQQDDAlsb2NhbGhvc3QwIBcNMTkwNzIyMTkyOTA0WhgPMjExOTA2\n  #    MjgxOTI5MDRaMBQxEjAQBgNVBAMMCWxvY2FsaG9zdDCCASIwDQYJKoZIhvcNAQEB\n  #    BQADggEPADCCAQoCggEBANce58Y/JykI58iyOXpxGfw0/gMvF0hUQAcUrSMxEO6n\n  #    fZRA49b4OV4SwWmA3395uL2eB2NB8y8qdQ9muXUdPBWE4l9rMZ6gmfu90N5B5uEl\n  #    94NcfBfYOKi1fJQ9i7WKhTjlRkMCgBkWPkUokvBZFRt8RtF7zI77BSEorHGQCk9t\n  #    /D7BS0GJyfVEhftbWcFEAG3VRcoMhF7kUzYwp+qESoriFRYLeDWv68ZOvG7eoWnP\n  #    PsvZStEVEimjvK5NSESEQa9xWyJOmlOKXhkdymtcUd/nXnx6UTCFgnkgzSdTWV41\n  #    CI6B6aJ9svCTI2QuoIq2HxX/ix7OvW1huVmcyHVxyUECAwEAAaNTMFEwHQYDVR0O\n  #    BBYEFPwN1OceFGm9v6ux8G+DZ3TUDYxqMB8GA1UdIwQYMBaAFPwN1OceFGm9v6ux\n  #    8G+DZ3TUDYxqMA8GA1UdEwEB/wQFMAMBAf8wDQYJKoZIhvcNAQELBQADggEBAG5D\n  #    874A4YI7YUwOVsVAdbWtgp1d0zKcPRR+r2OdSbTAV5/gcS3jgBJ3i1BN34JuDVFw\n  #    3DeJSYT3nxy2Y56lLnxDeF8CUTUtVQx3CuGkRg1ouGAHpO/6OqOhwLLorEmxi7tA\n  #    H2O8mtT0poX5AnOAhzVy7QW0D/k4WaoLyckM5hUa6RtvgvLxOwA0U+VGurCDoctu\n  #    8F4QOgTAWyh8EZIwaKCliFRSynDpv3JTUwtfZkxo6K6nce1RhCWFAsMvDZL8Dgc0\n  #    yvgJ38BRsFOtkRuAGSf6ZUwTO8JJRRIFnpUzXflAnGivK9M13D5GEQMmIl6U9Pvk\n  #    sxSmbIUfc2SGJGCJD4I=\n  #    -----END CERTIFICATE-----\n",
+          "type": "yaml"
+        }
+      }
+    }
+  ]
+}

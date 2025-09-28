@@ -1,0 +1,10 @@
+---
+
+- name: identify new hosts
+  import_tasks: identify_new_hosts.yml
+  tags: new-node
+
+- name: identify new LB hosts
+  import_tasks: identify_new_lb.yml
+  when: "'LB' in group_names"
+  tags: new-node

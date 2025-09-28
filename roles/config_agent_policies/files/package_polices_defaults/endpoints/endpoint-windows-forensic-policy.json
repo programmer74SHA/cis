@@ -1,0 +1,10 @@
+{
+  "id": "endpoint-windows-forensic-policy",
+  "name": "endpoint (windows-forensic-policy)",
+  "namespace": "",
+  "policy_id": "windows-forensic-policy",
+  "package": {
+    "name": "endpoint",
+    "version": ""
+  }
+}

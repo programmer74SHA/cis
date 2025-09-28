@@ -1,0 +1,210 @@
+{
+  "id": "cisco_ftd-ilb-collector-default",
+  "name": "cisco_ftd (ilb-collector-default)",
+  "namespace": "",
+  "policy_id": "ilb-collector-default",
+  "enabled": true,
+  "package": {
+    "name": "cisco_ftd",
+    "version": ""
+  },
+  "inputs": [
+    {
+      "type": "tcp",
+      "policy_template": "cisco_ftd",
+      "enabled": false,
+      "streams": [
+        {
+          "enabled": false,
+          "data_stream": {
+            "type": "logs",
+            "dataset": "cisco_ftd.log"
+          },
+          "vars": {
+            "tags": {
+              "value": [
+                "cisco-ftd",
+                "forwarded"
+              ],
+              "type": "text"
+            },
+            "tcp_host": {
+              "value": "localhost",
+              "type": "text"
+            },
+            "tcp_port": {
+              "value": 9003,
+              "type": "integer"
+            },
+            "internal_zones": {
+              "value": [],
+              "type": "text"
+            },
+            "external_zones": {
+              "value": [],
+              "type": "text"
+            },
+            "preserve_original_event": {
+              "value": false,
+              "type": "bool"
+            },
+            "private_is_internal": {
+              "value": true,
+              "type": "bool"
+            },
+            "processors": {
+              "type": "yaml"
+            },
+            "ssl": {
+              "value": "#certificate: \"/etc/server/cert.pem\"\n#key: \"/etc/server/key.pem\"",
+              "type": "yaml"
+            },
+            "tcp_options": {
+              "value": "#max_connections: 1\n#framing: delimiter\n#line_delimiter: \"\\n\"",
+              "type": "yaml"
+            },
+            "tz_offset": {
+              "value": "UTC",
+              "type": "text"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "udp",
+      "policy_template": "cisco_ftd",
+      "enabled": true,
+      "streams": [
+        {
+          "enabled": true,
+          "data_stream": {
+            "type": "logs",
+            "dataset": "cisco_ftd.log"
+          },
+          "vars": {
+            "tags": {
+              "value": [
+                "cisco-ftd",
+                "forwarded"
+              ],
+              "type": "text"
+            },
+            "udp_host": {
+              "type": "text",
+              "value": "0.0.0.0"
+            },
+            "udp_port": {
+              "type": "integer",
+              "value": "5553"
+            },
+            "internal_zones": {
+              "value": [],
+              "type": "text"
+            },
+            "external_zones": {
+              "value": [],
+              "type": "text"
+            },
+            "preserve_original_event": {
+              "type": "bool",
+              "value": true
+            },
+            "private_is_internal": {
+              "value": true,
+              "type": "bool"
+            },
+            "udp_options": {
+              "value": "#read_buffer: 100MiB\n#max_message_size: 50KiB\n#timeout: 300s",
+              "type": "yaml"
+            },
+            "processors": {
+              "type": "yaml"
+            },
+            "tz_offset": {
+              "value": "UTC",
+              "type": "text"
+            }
+          },
+          "compiled_stream": {
+            "host": "0.0.0.0:5553",
+            "tags": [
+              "preserve_original_event",
+              "private_is_internal",
+              "cisco-ftd",
+              "forwarded"
+            ],
+            "publisher_pipeline.disable_host": true,
+            "fields_under_root": true,
+            "fields": {
+              "_conf": {
+                "tz_offset": "UTC"
+              }
+            },
+            "processors": [
+              {
+                "add_locale": null
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "type": "logfile",
+      "policy_template": "cisco_ftd",
+      "enabled": false,
+      "streams": [
+        {
+          "enabled": false,
+          "data_stream": {
+            "type": "logs",
+            "dataset": "cisco_ftd.log"
+          },
+          "vars": {
+            "paths": {
+              "value": [
+                "/var/log/cisco-ftd.log"
+              ],
+              "type": "text"
+            },
+            "internal_zones": {
+              "value": [
+                "trust"
+              ],
+              "type": "text"
+            },
+            "external_zones": {
+              "value": [
+                "untrust"
+              ],
+              "type": "text"
+            },
+            "tags": {
+              "value": [
+                "cisco-ftd",
+                "forwarded"
+              ],
+              "type": "text"
+            },
+            "preserve_original_event": {
+              "value": false,
+              "type": "bool"
+            },
+            "private_is_internal": {
+              "value": true,
+              "type": "bool"
+            },
+            "processors": {
+              "type": "yaml"
+            },
+            "tz_offset": {
+              "value": "UTC",
+              "type": "text"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

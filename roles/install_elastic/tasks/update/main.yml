@@ -1,0 +1,48 @@
+---
+- name: Make clutser ready for update
+  block:
+  - name: Check for update possibly
+    import_tasks: check_for_update.yml
+    when: "'BDA' in group_names"
+
+  - name: Make cluster ready to update
+    import_tasks: pre_update.yml
+  tags: update
+
+- name: update elasricsearch nodes exept master node
+  block:
+  - name: Update frozen nodes
+    import_tasks: update_data_nodes.yml
+    when: "'FROZEN' in group_names"
+
+  - name: Update cold nodes
+    import_tasks: update_data_nodes.yml
+    when: "'COLD' in group_names"
+
+  - name: Update warm nodes
+    import_tasks: update_data_nodes.yml
+    when: "'WARM' in group_names"
+
+  - name: Update host nodes
+    import_tasks: update_data_nodes.yml
+    when: "'HOT' in group_names"
+    
+  - name: Update sf nodes
+    import_tasks: update_data_nodes.yml
+    when: "'SF' in group_names"
+
+  - name: Update BDA node
+    import_tasks: update_data_nodes.yml
+    when: "'BDA' in group_names"
+    
+  tags: update
+  when: inventory_hostname != master_node_hostname
+
+- name: Update Master node
+  import_tasks: update_data_nodes.yml
+  tags: update
+  when: inventory_hostname == master_node_hostname
+
+- name: Post Update
+  import_tasks: post_update.yml
+  tags: update

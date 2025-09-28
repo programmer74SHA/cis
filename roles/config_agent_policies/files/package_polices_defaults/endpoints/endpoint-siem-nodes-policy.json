@@ -1,0 +1,10 @@
+{
+  "id": "endpoint-siem-nodes-policy",
+  "name": "endpoint (siem-nodes-policy)",
+  "namespace": "",
+  "policy_id": "siem-nodes-policy",
+  "package": {
+    "name": "endpoint",
+    "version": ""
+  }
+}

@@ -1,0 +1,18 @@
+- name: generate pkcs8 certificate
+  command:
+    cmd:  openssl pkcs8 -inform PEM -in {{ logstash_cert_name }}.key -topk8 -nocrypt -outform PEM -out {{ logstash_cert_name }}.pkcs8.key
+    chdir:  "{{ logstash_cert_pem_dir }}/{{ logstash_cert_name }}"
+  when: "'BDA' in group_names"
+
+- name: copy logstah certificate into SF
+  block:
+    - name: copy certificate key to SF
+      copy:
+        src: "{{ logstash_cert_pem_dir }}/{{ logstash_cert_name }}/{{ logstash_cert_name }}.pkcs8.key"
+        dest: "{{ logstash_certs_directory_path }}"
+
+    - name: copy certificate crt to SF
+      copy:
+        src: "{{ logstash_cert_src_crt }}"
+        dest: "{{ logstash_certs_directory_path }}"
+  when: "'SF' in group_names"

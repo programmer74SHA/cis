@@ -1,0 +1,11 @@
+- name: configure fleet globals
+  uri:
+    url: "{{ elastic_address }}/_component_template/.fleet_globals-1?pretty"
+    method: PUT
+    body: "{{ lookup('file', 'files/fleet_globals.json') }}"
+    body_format: json
+    headers:
+      Content-Type: application/json
+    user: "{{ elk_user }}"
+    password: "{{ elk_password }}"
+    validate_certs: no

@@ -1,0 +1,22 @@
+---
+- name: Install chrony on servers
+  block:
+    - name: Install chrony
+      apt:
+        name: chrony
+        update_cache: true
+
+    - name: Check ntpd is running
+      shell: |
+        pgrep ntpd
+      register: ntpd_running
+      changed_when: ntpd_running.rc == 0
+      failed_when: false
+
+    - name: Disable ntpd
+      service:
+        name: "{{ ntp_service }}"
+        state: stopped
+        enabled: false
+      when:
+        - ntpd_running is changed

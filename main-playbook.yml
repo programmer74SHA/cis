@@ -1,0 +1,70 @@
+- name: "APK SIEM Product Installer - Fixed Version"
+  hosts: all
+  serial: "{{ ansible_serial | default('100%') }}"
+  gather_facts: true
+  
+  pre_tasks:
+    - name: Set deployment facts
+      set_fact:
+        deployment_start_time: "{{ ansible_date_time.iso8601 }}"
+        
+  roles:
+    - pre_checks
+    - add-new-node
+    # - deploy_apt_repository 
+    # - install_dependencies 
+    
+    # Install Elasticsearch first on all nodes
+    - role: install_elastic
+      when: >
+        ('ELASTICSEARCH' in group_names) or 
+        (hostvars[inventory_hostname].get('elasticsearch_nodes', []) | length > 0)
+      tags: [cluster, simple, elasticsearch]
+    
+    # Install Kibana specifically on BDA nodes after Elasticsearch is ready
+    - role: install_kibana
+      when: >
+        ('BDA' in group_names) or 
+        (hostvars[inventory_hostname].get('install_kibana', false) | bool)
+      tags: [cluster, simple, kibana]
+    
+    # Continue with other services
+    # - deploy_nba_node
+    # - setup_nfs
+    # - setup_ntp_server
+    # - integrations_server
+    # - elasticsearch_artifacts
+    # - elasticsearch-maps-server
+    # - install_logstash
+    # - wait_for_elasticsearch_and_kibana
+    # - config_fleet_settings
+    # - config_outputs
+    # - config_agent_policies
+    # - import_ingest_pipelines
+    # - config_elk_templates
+    # - install_kaf
+    # - install_elastic_agent
+    # - copy_fleet
+    # - health_check
+    # - versioning
+    
+  post_tasks:
+    - name: Display deployment completion status
+      debug:
+        msg: |
+          
+          === SIEM DEPLOYMENT COMPLETED ===
+          
+          Start Time: {{ deployment_start_time }}
+          End Time: {{ ansible_date_time.iso8601 }}
+          
+          Elasticsearch Nodes: {{ hostvars[inventory_hostname].get('elasticsearch_nodes', []) | length }}
+          Kibana Installed: {{ ('BDA' in group_names) | ternary('Yes', 'No') }}
+          
+          Next Steps:
+          1. Verify cluster: curl -k -u elastic:PASSWORD https://{{ ansible_default_ipv4.address }}:9200/_cat/nodes?v
+          2. Access Kibana: http://{{ ansible_default_ipv4.address if 'BDA' in group_names else 'BDA_HOST' }}:5601
+          3. Run health check: /usr/share/siem/elasticsearch/cluster-verification.sh
+      when: inventory_hostname in groups.get('BDA', [])
+      
+  tags: [cluster, simple]

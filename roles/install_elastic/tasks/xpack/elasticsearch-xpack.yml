@@ -1,0 +1,27 @@
+---
+
+#Security configuration
+- name: include security/elasticsearch-security.yml
+  import_tasks: security/elasticsearch-security.yml
+
+#Make sure elasticsearch.keystore has correct Permissions
+# - name: Set elasticsearch.keystore Permissions
+#   file: 
+#     state: file
+#     path: "{{ es_conf_dir }}/elasticsearch.keystore"
+#     owner: root
+#     group: "{{ es_group }}"
+#     mode: "0660"
+
+- name: Set elasticsearch.keystore Permissions and Ownership in Docker container
+  shell: |
+    if docker exec elasticsearch-{{ inventory_hostname }} test -f /usr/share/elasticsearch/config/elasticsearch.keystore; then
+      docker exec elasticsearch-{{ inventory_hostname }} chown elasticsearch:elasticsearch /usr/share/elasticsearch/config/elasticsearch.keystore
+      docker exec elasticsearch-{{ inventory_hostname }} chmod 660 /usr/share/elasticsearch/config/elasticsearch.keystore
+      echo "Permissions set successfully"
+    else
+      echo "Keystore file not found, skipping permission change"
+    fi
+  when: container_check.stdout != ""
+  register: keystore_permissions_result
+  changed_when: "'Permissions set successfully' in keystore_permissions_result.stdout"

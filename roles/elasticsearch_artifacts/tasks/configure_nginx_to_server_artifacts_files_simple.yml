@@ -1,0 +1,69 @@
+---
+- name: install artifact
+  block:
+    - name: Remove artifacts for update
+      file:
+        path: "{{ artifact_server_datastore_path }}"
+        state: absent
+      tags: update
+
+    - name: make sure nginx is installed
+      apt:
+        name: nginx
+        state: present
+    - name: "Ensure artifact datastore path exists with correct permissions"
+      file:
+        path: "{{ artifact_server_datastore_path }}"
+        state: directory
+        owner: "{{ nginx_service_username }}"
+        group: "{{ nginx_service_groupname }}"
+        mode: "0755"
+
+    - name: "Copy files to artifact server datastore path"
+      synchronize:
+        src: "files/{{ artifact_server_datastore_source }}"
+        dest: "{{ artifact_server_datastore_path }}"
+        archive: yes
+        compress: yes
+        owner: yes
+        group: yes
+        perms: yes
+
+    - name: "Ensure correct permissions for synced files"
+      file:
+        path: "{{ artifact_server_datastore_path }}"
+        recurse: yes
+        owner: "{{ nginx_service_username }}"
+        group: "{{ nginx_service_groupname }}"
+        mode: "0755"
+
+    - name: "Config Nginx webserver to serve Artifact files"
+      template:
+        src: "templates/{{ artifact_server_nginx_config_file_name }}"
+        dest: "{{ artifact_server_nginx_config_available_path }}"
+        owner: root
+        group: root
+        mode: "0755"
+      notify:
+        - Reload Nginx
+
+    - name: Enable nginx site
+      file:
+        src: "{{ artifact_server_nginx_config_available_path }}"
+        dest: "{{ artifact_server_nginx_config_enables_path }}"
+        state: link
+      notify:
+        - Reload Nginx
+
+    - name: Enable nginx module
+      service:
+        name: nginx
+        state: started
+        enabled: true
+      notify:
+        - Reload Nginx
+
+    - name: Load nginx configuration file
+      command: nginx -s reload
+
+  when: inventory_hostname == groups['SF'][0] or 'COLLECTOR' in group_names

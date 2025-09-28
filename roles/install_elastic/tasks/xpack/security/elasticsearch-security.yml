@@ -1,0 +1,159 @@
+---
+#Security specific configuration done here
+
+#TODO: 1. Skip users with no password defined or error 2. Passwords | length > 6
+
+#-----------------------------Create Bootstrap User-----------------------------------
+### START BLOCK elasticsearch keystore ###
+- name: create the elasticsearch keystore
+  block:
+    - name: Check if Elasticsearch container is running
+      shell: docker ps -q -f name=elasticsearch-{{ inventory_hostname }} -f status=running
+      register: container_check
+      changed_when: false
+
+    - name: Debug container status
+      debug:
+        msg: |
+          Container check result: {{ container_check.stdout }}
+          Container running: {{ container_check.stdout != "" }}
+
+    - name: Wait for Elasticsearch container to be ready
+      shell: |
+        docker exec elasticsearch-{{ inventory_hostname }} \
+        /usr/share/elasticsearch/bin/elasticsearch-keystore --help
+      register: container_ready
+      until: container_ready.rc == 0
+      retries: 5
+      delay: 10
+      changed_when: false
+      when: container_check.stdout != ""
+
+    - name: Check if keystore already exists in container
+      shell: |
+        docker exec elasticsearch-{{ inventory_hostname }} \
+        /usr/share/elasticsearch/bin/elasticsearch-keystore list
+      register: keystore_exists
+      changed_when: false
+      failed_when: false
+      when: container_check.stdout != ""
+
+    - name: create the keystore if it doesn't exist yet
+      shell: |
+        docker exec elasticsearch-{{ inventory_hostname }} \
+        /usr/share/elasticsearch/bin/elasticsearch-keystore create
+      when: 
+        - container_check.stdout != ""
+        - keystore_exists.rc != 0
+      register: keystore_creation
+
+    - name: Force recreate keystore if it exists but we need to reset it
+      shell: |
+        echo "y" | docker exec -i elasticsearch-{{ inventory_hostname }} \
+        /usr/share/elasticsearch/bin/elasticsearch-keystore create
+      when: 
+        - container_check.stdout != ""
+        - keystore_exists.rc == 0
+        - force_keystore_recreate | default(false)
+      register: keystore_recreation
+
+    - name: Check if bootstrap password is set
+      shell: |
+        docker exec elasticsearch-{{ inventory_hostname }} \
+        /usr/share/elasticsearch/bin/elasticsearch-keystore list
+      register: list_keystore
+      changed_when: false
+      check_mode: no
+      when: container_check.stdout != ""
+
+    - name: Create Bootstrap password for elastic user
+      shell: |
+        echo {{ es_api_basic_auth_password | quote }} | \
+        docker exec -i elasticsearch-{{ inventory_hostname }} \
+        /usr/share/elasticsearch/bin/elasticsearch-keystore add -x 'bootstrap.password'
+      when:
+        - container_check.stdout != ""
+        - es_api_basic_auth_username is defined 
+        - list_keystore is defined
+        - es_api_basic_auth_username == 'elastic' 
+        - list_keystore.stdout_lines is defined
+        - "'bootstrap.password' not in list_keystore.stdout_lines"
+      no_log: true
+      register: bootstrap_result
+      failed_when: 
+        - bootstrap_result.rc != 0
+        - "'already exists' not in bootstrap_result.stderr"
+
+    - name: Remove keystore entries
+      shell: |
+        docker exec elasticsearch-{{ inventory_hostname }} \
+        /usr/share/elasticsearch/bin/elasticsearch-keystore remove '{{ item.key }}'
+      with_items: "{{ es_keystore_entries }}"
+      when:
+        - container_check.stdout != ""
+        - es_keystore_entries is defined and es_keystore_entries | length > 0
+        - item.state is defined and item.state == 'absent'
+        - list_keystore is defined and list_keystore.stdout_lines is defined
+        - item.key in list_keystore.stdout_lines
+        - "'bootstrap.password' not in item.key"
+      no_log: true
+
+    - name: Reload keystore entries
+      shell: |
+        docker exec elasticsearch-{{ inventory_hostname }} \
+        /usr/share/elasticsearch/bin/elasticsearch-keystore list
+      register: list_keystore
+      changed_when: false
+      check_mode: no
+      when: container_check.stdout != ""
+
+    - name: Add keystore entries
+      shell: |
+        echo {{ item.value | quote }} | \
+        docker exec -i elasticsearch-{{ inventory_hostname }} \
+        /usr/share/elasticsearch/bin/elasticsearch-keystore add -x -f {{ item.key }}
+      with_items: "{{ es_keystore_entries }}"
+      when:
+        - container_check.stdout != ""
+        - es_keystore_entries is defined and es_keystore_entries | length > 0
+        - item.state is undefined or item.state == 'present'
+        - list_keystore is defined and list_keystore.stdout_lines is defined
+        - item.force|default(False) or (not item.force|default(False) and item.key not in list_keystore.stdout_lines)
+        - "'bootstrap.password' not in item.key"
+      no_log: true
+
+  rescue:
+    - name: Display container logs on failure
+      shell: docker logs --tail 50 elasticsearch-{{ inventory_hostname }}
+      register: container_logs
+      ignore_errors: yes
+
+    - name: Show container logs
+      debug:
+        msg: "{{ container_logs.stdout_lines }}"
+      when: container_logs is defined
+
+### END BLOCK elasticsearch keystore ###
+
+#-----------------------------FILE BASED REALM----------------------------------------
+
+- name: import elasticsearch security file tasks
+  import_tasks: elasticsearch-security-file.yml
+  when: 
+    - "'SF' in group_names or 'BDA' in group_names"
+    - "(es_users is defined and es_users.file is defined) or (es_roles is defined and es_roles.file is defined)"
+
+#-----------------------------ROLE MAPPING ----------------------------------------
+
+#Copy Roles files
+- name: Copy role_mapping.yml file for instance
+  template: 
+    src: security/role_mapping.yml.j2
+    dest: "{{ es_conf_dir }}/role_mapping.yml"
+    owner: root
+    group: "{{ es_group }}"
+    mode: "0660"
+    force: yes
+  when: 
+    - es_role_mapping is defined
+    - container_check.stdout != ""  # Only if container is running

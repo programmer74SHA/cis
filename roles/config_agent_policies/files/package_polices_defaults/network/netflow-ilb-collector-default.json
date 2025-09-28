@@ -1,0 +1,103 @@
+{
+  "id": "netflow-ilb-collector-default",
+  "name": "netflow (ilb-collector-default)",
+  "namespace": "",
+  "policy_id": "ilb-collector-default",
+  "enabled": true,
+  "package": {
+    "name": "netflow",
+    "version": ""
+  },
+  "inputs": [
+    {
+      "type": "netflow",
+      "policy_template": "netflow",
+      "enabled": true,
+      "streams": [
+        {
+          "enabled": true,
+          "data_stream": {
+            "type": "logs",
+            "dataset": "netflow.log"
+          },
+          "vars": {
+            "host": {
+              "type": "text",
+              "value": "0.0.0.0"
+            },
+            "port": {
+              "value": 2055,
+              "type": "integer"
+            },
+            "expiration_timeout": {
+              "value": "30m",
+              "type": "text"
+            },
+            "internal_networks": {
+              "value": [],
+              "type": "text"
+            },
+            "workers": {
+              "value": 1,
+              "type": "integer"
+            },
+            "queue_size": {
+              "value": 8192,
+              "type": "integer"
+            },
+            "read_buffer": {
+              "type": "text"
+            },
+            "custom_definitions": {
+              "value": [],
+              "type": "text"
+            },
+            "detect_sequence_reset": {
+              "value": true,
+              "type": "bool"
+            },
+            "max_message_size": {
+              "value": "10KiB",
+              "type": "text"
+            },
+            "tags": {
+              "value": [
+                "netflow",
+                "forwarded"
+              ],
+              "type": "text"
+            },
+            "timeout": {
+              "type": "text"
+            },
+            "processors": {
+              "type": "yaml"
+            }
+          },
+          "compiled_stream": {
+            "protocols": [
+              "v1",
+              "v5",
+              "v6",
+              "v7",
+              "v8",
+              "v9",
+              "ipfix"
+            ],
+            "host": "0.0.0.0:2055",
+            "max_message_size": "10KiB",
+            "workers": 1,
+            "expiration_timeout": "30m",
+            "queue_size": 8192,
+            "detect_sequence_reset": true,
+            "tags": [
+              "netflow",
+              "forwarded"
+            ],
+            "publisher_pipeline.disable_host": true
+          }
+        }
+      ]
+    }
+  ]
+}

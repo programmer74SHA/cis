@@ -1,0 +1,412 @@
+{
+  "id": "elasticsearch-coordinator-nodes-policy",
+  "name": "elasticsearch (coordinator-nodes-policy)",
+  "namespace": "",
+  "policy_id": "coordinator-nodes-policy",
+  "enabled": true,
+  "package": {
+    "name": "elasticsearch",
+    "version": ""
+  },
+  "inputs": [
+    {
+      "type": "logfile",
+      "policy_template": "elasticsearch",
+      "enabled": true,
+      "streams": [
+        {
+          "enabled": false,
+          "data_stream": {
+            "type": "logs",
+            "dataset": "elasticsearch.audit"
+          },
+          "vars": {
+            "paths": {
+              "value": [
+                "/var/log/elasticsearch/*_audit.json"
+              ],
+              "type": "text"
+            },
+            "tags": {
+              "value": [],
+              "type": "text"
+            }
+          }
+        },
+        {
+          "enabled": false,
+          "data_stream": {
+            "type": "logs",
+            "dataset": "elasticsearch.deprecation"
+          },
+          "vars": {
+            "paths": {
+              "value": [
+                "/var/log/elasticsearch/*_deprecation.json"
+              ],
+              "type": "text"
+            },
+            "tags": {
+              "value": [],
+              "type": "text"
+            }
+          }
+        },
+        {
+          "enabled": true,
+          "data_stream": {
+            "type": "logs",
+            "dataset": "elasticsearch.gc"
+          },
+          "vars": {
+            "paths": {
+              "value": [
+                "/var/log/elasticsearch/gc.log.[0-9]*",
+                "/var/log/elasticsearch/gc.log"
+              ],
+              "type": "text"
+            },
+            "tags": {
+              "value": [],
+              "type": "text"
+            }
+          },
+          "compiled_stream": {
+            "paths": [
+              "/var/log/elasticsearch/gc.log.[0-9]*",
+              "/var/log/elasticsearch/gc.log"
+            ],
+            "tags": null,
+            "exclude_files": [
+              ".gz$"
+            ],
+            "exclude_lines": [
+              "^(OpenJDK|Java HotSpot).* Server VM ",
+              "^CommandLine flags: ",
+              "^Memory: ",
+              "^{"
+            ],
+            "multiline": {
+              "pattern": "^([0-9]{4}-[0-9]{2}-[0-9]{2}|{)",
+              "negate": true,
+              "match": "after"
+            },
+            "processors": [
+              {
+                "add_fields": {
+                  "target": "",
+                  "fields": {
+                    "ecs.version": "1.10.0"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        {
+          "enabled": true,
+          "data_stream": {
+            "type": "logs",
+            "dataset": "elasticsearch.server"
+          },
+          "vars": {
+            "paths": {
+              "value": [
+                "/var/log/elasticsearch/*_server.json"
+              ],
+              "type": "text"
+            },
+            "tags": {
+              "value": [],
+              "type": "text"
+            }
+          },
+          "compiled_stream": {
+            "paths": [
+              "/var/log/elasticsearch/*_server.json"
+            ],
+            "tags": null,
+            "exclude_files": [
+              ".gz$",
+              "_slowlog.log$",
+              "_access.log$",
+              "_deprecation.log$"
+            ]
+          }
+        },
+        {
+          "enabled": false,
+          "data_stream": {
+            "type": "logs",
+            "dataset": "elasticsearch.slowlog"
+          },
+          "vars": {
+            "paths": {
+              "value": [
+                "/var/log/elasticsearch/*_index_search_slowlog.json",
+                "/var/log/elasticsearch/*_index_indexing_slowlog.json"
+              ],
+              "type": "text"
+            },
+            "tags": {
+              "value": [],
+              "type": "text"
+            }
+          }
+        }
+      ],
+      "vars": {
+        "condition": {
+          "type": "text"
+        }
+      }
+    },
+    {
+      "type": "elasticsearch/metrics",
+      "policy_template": "elasticsearch",
+      "enabled": false,
+      "streams": [
+        {
+          "enabled": false,
+          "data_stream": {
+            "type": "metrics",
+            "dataset": "elasticsearch.stack_monitoring.ccr"
+          },
+          "vars": {
+            "period": {
+              "value": "10s",
+              "type": "text"
+            },
+            "tags": {
+              "value": [],
+              "type": "text"
+            }
+          }
+        },
+        {
+          "enabled": false,
+          "data_stream": {
+            "type": "metrics",
+            "dataset": "elasticsearch.stack_monitoring.cluster_stats"
+          },
+          "vars": {
+            "period": {
+              "value": "10s",
+              "type": "text"
+            },
+            "tags": {
+              "value": [],
+              "type": "text"
+            }
+          }
+        },
+        {
+          "enabled": false,
+          "data_stream": {
+            "type": "metrics",
+            "dataset": "elasticsearch.stack_monitoring.enrich"
+          },
+          "vars": {
+            "period": {
+              "value": "10s",
+              "type": "text"
+            },
+            "tags": {
+              "value": [],
+              "type": "text"
+            }
+          }
+        },
+        {
+          "enabled": false,
+          "data_stream": {
+            "type": "metrics",
+            "dataset": "elasticsearch.stack_monitoring.index"
+          },
+          "vars": {
+            "period": {
+              "value": "10s",
+              "type": "text"
+            },
+            "tags": {
+              "value": [],
+              "type": "text"
+            }
+          }
+        },
+        {
+          "enabled": false,
+          "data_stream": {
+            "type": "metrics",
+            "dataset": "elasticsearch.stack_monitoring.index_recovery"
+          },
+          "vars": {
+            "active.only": {
+              "value": true,
+              "type": "bool"
+            },
+            "period": {
+              "value": "10s",
+              "type": "text"
+            },
+            "tags": {
+              "value": [],
+              "type": "text"
+            }
+          }
+        },
+        {
+          "enabled": false,
+          "data_stream": {
+            "type": "metrics",
+            "dataset": "elasticsearch.stack_monitoring.index_summary"
+          },
+          "vars": {
+            "period": {
+              "value": "10s",
+              "type": "text"
+            },
+            "tags": {
+              "value": [],
+              "type": "text"
+            }
+          }
+        },
+        {
+          "enabled": false,
+          "data_stream": {
+            "type": "metrics",
+            "dataset": "elasticsearch.ingest_pipeline"
+          },
+          "vars": {
+            "ingest_pipeline_processor_sampling_rate": {
+              "value": "0.25",
+              "type": "text"
+            },
+            "tags": {
+              "value": [],
+              "type": "text"
+            }
+          }
+        },
+        {
+          "enabled": false,
+          "data_stream": {
+            "type": "metrics",
+            "dataset": "elasticsearch.stack_monitoring.ml_job"
+          },
+          "vars": {
+            "period": {
+              "value": "10s",
+              "type": "text"
+            },
+            "tags": {
+              "value": [],
+              "type": "text"
+            }
+          }
+        },
+        {
+          "enabled": false,
+          "data_stream": {
+            "type": "metrics",
+            "dataset": "elasticsearch.stack_monitoring.node"
+          },
+          "vars": {
+            "period": {
+              "value": "10s",
+              "type": "text"
+            },
+            "tags": {
+              "value": [],
+              "type": "text"
+            }
+          }
+        },
+        {
+          "enabled": false,
+          "data_stream": {
+            "type": "metrics",
+            "dataset": "elasticsearch.stack_monitoring.node_stats"
+          },
+          "vars": {
+            "period": {
+              "value": "10s",
+              "type": "text"
+            },
+            "tags": {
+              "value": [],
+              "type": "text"
+            }
+          }
+        },
+        {
+          "enabled": false,
+          "data_stream": {
+            "type": "metrics",
+            "dataset": "elasticsearch.stack_monitoring.pending_tasks"
+          },
+          "vars": {
+            "period": {
+              "value": "10s",
+              "type": "text"
+            },
+            "tags": {
+              "value": [],
+              "type": "text"
+            }
+          }
+        },
+        {
+          "enabled": false,
+          "data_stream": {
+            "type": "metrics",
+            "dataset": "elasticsearch.stack_monitoring.shard"
+          },
+          "vars": {
+            "period": {
+              "value": "10s",
+              "type": "text"
+            },
+            "tags": {
+              "value": [],
+              "type": "text"
+            }
+          }
+        }
+      ],
+      "vars": {
+        "hosts": {
+          "value": [
+            "http://localhost:9200"
+          ],
+          "type": "text"
+        },
+        "username": {
+          "type": "text"
+        },
+        "password": {
+          "type": "password"
+        },
+        "api_key": {
+          "type": "password"
+        },
+        "scope": {
+          "value": "node",
+          "type": "select"
+        },
+        "ssl": {
+          "value": "#certificate_authorities: [\"/etc/ca.crt\"]\n#certificate: \"/etc/client.crt\"\n#key: \"/etc/client.key\"",
+          "type": "yaml"
+        },
+        "leaderelection": {
+          "value": false,
+          "type": "bool"
+        },
+        "condition": {
+          "type": "text"
+        }
+      }
+    }
+  ]
+}

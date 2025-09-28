@@ -1,0 +1,90 @@
+---
+# roles/install_elastic/tasks/set-node-roles.yml
+# Fixed version with proper variable initialization
+
+- name: Initialize elasticsearch_node_roles variable
+  set_fact:
+    elasticsearch_node_roles: []
+
+- name: Debug node and tag information
+  debug:
+    msg: |
+      Node Role Assignment Debug:
+      - Node: {{ inventory_hostname }}
+      - Groups: {{ group_names }}
+      - Tags: {{ ansible_run_tags }}
+      - Initial roles: {{ elasticsearch_node_roles }}
+
+- name: Add BDA roles for cluster mode
+  set_fact:
+    elasticsearch_node_roles: "{{ elasticsearch_node_roles + ['master', 'transform', 'ml'] }}"
+  when: 
+    - "'BDA' in group_names"
+    - "'cluster' in ansible_run_tags"
+
+- name: Add BDA roles for simple mode
+  set_fact:
+    elasticsearch_node_roles: "{{ elasticsearch_node_roles + ['master', 'transform', 'ml', 'data', 'data_content', 'remote_cluster_client', 'data_hot'] }}"
+  when: 
+    - "'BDA' in group_names"
+    - "'simple' in ansible_run_tags"
+
+- name: Add SF roles for simple mode
+  set_fact:
+    elasticsearch_node_roles: "{{ elasticsearch_node_roles + ['ingest', 'transform'] }}"
+  when: 
+    - "'SF' in group_names"
+    - "'simple' in ansible_run_tags"
+
+- name: Add SF roles for cluster mode
+  set_fact:
+    elasticsearch_node_roles: "{{ elasticsearch_node_roles + ['ingest'] }}"
+  when: 
+    - "'SF' in group_names"
+    - "'cluster' in ansible_run_tags"
+
+- name: Add SF roles for new-node mode
+  set_fact:
+    elasticsearch_node_roles: "{{ elasticsearch_node_roles + ['ingest'] }}"
+  when: 
+    - "'SF' in group_names"
+    - "'new-node' in ansible_run_tags"
+
+- name: Add HOT node roles
+  set_fact:
+    elasticsearch_node_roles: "{{ elasticsearch_node_roles + ['master', 'data_content', 'data_hot'] }}"
+  when: inventory_hostname in groups['HOT']
+
+- name: Add WARM node roles
+  set_fact:
+    elasticsearch_node_roles: "{{ elasticsearch_node_roles + ['data_warm'] }}"
+  when: inventory_hostname in groups['WARM']
+
+- name: Add COLD node roles
+  set_fact:
+    elasticsearch_node_roles: "{{ elasticsearch_node_roles + ['data_cold'] }}"
+  when: inventory_hostname in groups['COLD']
+
+- name: Add FROZEN node roles
+  set_fact:
+    elasticsearch_node_roles: "{{ elasticsearch_node_roles + ['data_frozen'] }}"
+  when: inventory_hostname in groups['FROZEN']
+
+- name: Ensure at least one role is assigned (fallback to data role)
+  set_fact:
+    elasticsearch_node_roles: "{{ elasticsearch_node_roles + ['data'] }}"
+  when: elasticsearch_node_roles | length == 0
+
+- name: Remove duplicate roles and finalize
+  set_fact:
+    elasticsearch_node_roles: "{{ elasticsearch_node_roles | unique | list }}"
+
+- name: Display final node role configuration
+  debug:
+    msg: |
+      Final Node Role Configuration for {{ inventory_hostname }}:
+      =======================================================
+      - Node groups: {{ group_names }}
+      - Assigned roles: {{ elasticsearch_node_roles }}
+      - Primary role: {% if 'master' in elasticsearch_node_roles %}master{% elif 'ingest' in elasticsearch_node_roles %}ingest{% elif 'data_hot' in elasticsearch_node_roles %}data_hot{% elif 'data_warm' in elasticsearch_node_roles %}data_warm{% elif 'data_cold' in elasticsearch_node_roles %}data_cold{% elif 'data_frozen' in elasticsearch_node_roles %}data_frozen{% else %}data{% endif %}
+      - Ready for configuration generation

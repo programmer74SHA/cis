@@ -1,0 +1,17 @@
+---
+
+- name: "Delete artifact_server_datastore_path if it exists"
+  block:
+
+    - name: "Check if artifact_server_datastore_path exists"
+      stat:
+        path: "{{ artifact_server_datastore_path }}"
+      register: artifact_folder
+
+    - name: "Delete artifact_server_datastore_path folder"
+      file:
+        path: "{{ artifact_server_datastore_path }}"
+        state: absent
+      when: artifact_folder.stat.exists
+  when: "'SF' in group_names"
+  tags: new-node

@@ -1,0 +1,123 @@
+---
+# roles/install_elastic/tasks/system-config.yml
+# Only system configuration - Docker installation handled elsewhere
+
+- name: Create Elasticsearch directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: "1000"
+    group: "1000"
+    mode: "0755"
+  loop:
+    - "{{ elasticsearch_docker_path }}"
+    - "{{ elasticsearch_data_path }}"
+    - "{{ elasticsearch_logs_path }}"
+    - "{{ elasticsearch_config_path }}"
+    - "{{ elasticsearch_certs_path }}"
+
+- name: Create Docker network for Elasticsearch
+  docker_network:
+    name: elastic
+    driver: bridge
+    ipam_config:
+      - subnet: "172.20.0.0/16"
+        gateway: "172.20.0.1"
+
+# System configuration using shell commands (avoiding sysctl module)
+- name: Configure kernel parameters for Elasticsearch
+  block:
+    - name: Check current vm.max_map_count
+      shell: sysctl -n vm.max_map_count
+      register: current_max_map_count
+      changed_when: false
+
+    - name: Set vm.max_map_count using shell command
+      shell: echo 262144 > /proc/sys/vm/max_map_count
+      when: current_max_map_count.stdout != "262144"
+
+    - name: Make vm.max_map_count persistent
+      lineinfile:
+        path: /etc/sysctl.conf
+        regexp: '^vm\.max_map_count'
+        line: 'vm.max_map_count=262144'
+        create: yes
+      when: current_max_map_count.stdout != "262144"
+
+    - name: Set vm.swappiness
+      shell: echo 1 > /proc/sys/vm/swappiness
+
+    - name: Make vm.swappiness persistent
+      lineinfile:
+        path: /etc/sysctl.conf
+        regexp: '^vm\.swappiness'
+        line: 'vm.swappiness=1'
+        create: yes
+
+    - name: Set fs.file-max
+      shell: echo 65536 > /proc/sys/fs/file-max
+
+    - name: Make fs.file-max persistent
+      lineinfile:
+        path: /etc/sysctl.conf
+        regexp: '^fs\.file-max'
+        line: 'fs.file-max=65536'
+        create: yes
+
+    - name: Verify kernel parameters
+      shell: |
+        echo "vm.max_map_count: $(sysctl -n vm.max_map_count)"
+        echo "vm.swappiness: $(sysctl -n vm.swappiness)"
+        echo "fs.file-max: $(sysctl -n fs.file-max)"
+      register: verify_params
+      changed_when: false
+
+    - name: Display verification results
+      debug:
+        msg: "{{ verify_params.stdout_lines }}"
+
+  rescue:
+    - name: Log configuration issues
+      debug:
+        msg: "Some kernel parameters could not be set. Elasticsearch may still work but performance might be affected."
+
+- name: Configure system limits for Elasticsearch
+  blockinfile:
+    path: /etc/security/limits.conf
+    block: |
+      # Elasticsearch limits
+      elasticsearch soft nofile 65536
+      elasticsearch hard nofile 65536
+      elasticsearch soft nproc 4096
+      elasticsearch hard nproc 4096
+      elasticsearch soft memlock unlimited
+      elasticsearch hard memlock unlimited
+      root soft nofile 65536
+      root hard nofile 65536
+      root soft nproc 4096
+      root hard nproc 4096
+      root soft memlock unlimited
+      root hard memlock unlimited
+    marker: "# {mark} ANSIBLE MANAGED BLOCK - Elasticsearch limits"
+
+- name: Optimize system for Elasticsearch
+  block:
+    - name: Disable swap temporarily
+      command: swapoff -a
+      ignore_errors: true
+
+    - name: Comment out swap in fstab (optional)
+      replace:
+        path: /etc/fstab
+        regexp: '^([^#].*\s+swap\s+.*)$'
+        replace: '# \1'
+      when: disable_swap_permanently | default(false)
+
+    - name: Check final swap status
+      shell: free -h | grep -i swap
+      register: swap_status
+      changed_when: false
+
+    - name: Display swap status
+      debug:
+        msg: "Swap status: {{ swap_status.stdout }}"

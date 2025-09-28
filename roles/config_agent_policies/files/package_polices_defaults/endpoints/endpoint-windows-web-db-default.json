@@ -1,0 +1,10 @@
+{
+  "id": "endpoint-windows-web-db-default",
+  "name": "endpoint (windows-web-db-default)",
+  "namespace": "",
+  "policy_id": "windows-web-db-default",
+  "package": {
+    "name": "endpoint",
+    "version": ""
+  }
+}

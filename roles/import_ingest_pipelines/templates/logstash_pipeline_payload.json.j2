@@ -1,0 +1,12 @@
+{
+  "description": "",
+  "pipeline": "{{ lookup('template', '{{ logstash_pipeline_content_path }}/{{ item.key }}.j2') }}",
+  "settings": {
+    "pipeline.batch.delay": 500,
+    "pipeline.batch.size": 500,
+    "pipeline.workers": {{ item.value }},
+    "queue.checkpoint.writes": 1024,
+    "queue.max_bytes": "1gb",
+    "queue.type": "memory"
+  }
+}

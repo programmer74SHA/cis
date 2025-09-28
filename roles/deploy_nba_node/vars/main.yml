@@ -1,0 +1,14 @@
+#ZEEK
+zeek_plugins_file_name: "nba_zeek_plugins.bundle"
+siem_file_directory:  "/usr/share/siem"
+zeek_plugins_directory: "{{ siem_file_directory }}/zeek"
+zeek_plugins_file_path: "{{ zeek_plugins_directory }}/{{ zeek_plugins_file_name }}"
+zeek_home_directory: "/opt/zeek"
+zeek_binaries_folder: "{{ zeek_home_directory }}/bin"
+zeek_configuration_directory: "{{ zeek_home_directory }}/etc"
+zeek_logrotate_config_dir: "{{ zeek_home_directory }}/share/zeek/site"
+### Suricata
+suricata_configuration_directory : "/etc/suricata"
+suricata_config_file: "{{ suricata_configuration_directory }}/suricata.yaml"
+suricata_rules_directory: "{{ suricata_configuration_directory }}/rules"
+suricata_rules_filename: "suricata-6.0.x.tar.gz"

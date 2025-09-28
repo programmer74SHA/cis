@@ -1,0 +1,10 @@
+{
+  "id": "endpoint-windows-dhcp-default",
+  "name": "endpoint (windows-dhcp-default)",
+  "namespace": "",
+  "policy_id": "windows-dhcp-default",
+  "package": {
+    "name": "endpoint",
+    "version": ""
+  }
+}

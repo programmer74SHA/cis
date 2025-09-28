@@ -1,0 +1,74 @@
+- name: "copy certs"
+  block:
+    - name: "Create directory files"
+      file:
+        path: "{{ item }}"
+        state: directory
+        mode: '0766'
+        group: kibana
+        owner: kibana
+        recurse: true
+      with_items: 
+        - "{{ kibana_certs_directory_path }}"
+        - "{{ kibana_certs_directory_path }}/ca"
+
+    - name: "Copy certs to other hosts. no need to run on the BDA server"
+      block:
+        - name: "copy certs files to destination"
+          copy:
+            src: "{{ es_ssl_certificate_path }}/{{ inventory_hostname }}"
+            dest: "{{ es_ssl_certificate_path }}/{{ inventory_hostname }}"
+
+        - name: "Copy Ca file to destination"
+          copy:
+            src: "{{ es_ssl_certificate_path }}/ca/ca.crt"
+            dest: "{{ es_ssl_certificate_path }}/ca/ca.crt"
+
+      when: "'BDA' not in group_names"
+
+    - name: "Copy certs to fleet server"
+      block:
+        - name: "Check certificate destination path"
+          file:
+            path: "{{ es_ssl_certificate_path }}"
+            state: directory
+        - name: "Copy fleet server certificate to sf server"
+          copy:
+            src: "{{ es_ssl_certificate_path }}/fleet-server"
+            dest: "{{ es_ssl_certificate_path }}/fleet-server"
+      when: 
+        - "'SF' in group_names"
+        - "'LB' in group_names"
+
+    - name: "Copy kibana certificate files"
+      block:
+        - name: "Copy certificate files"
+          copy:
+            src: "{{ es_ssl_certificate_path }}/kibana"
+            dest: "{{ kibana_certs_directory_path }}"
+
+        - name: "Copy ca certificate files to }/kibana"
+          copy:
+            src: "{{ es_ssl_certificate_path }}/ca/ca.crt"
+            dest: "{{ kibana_ca_file_path }}"
+        - name: Generate certificate fingerprint
+          command: openssl x509 -noout -fingerprint -sha256 -in /etc/elasticsearch/certs/ca/ca.crt
+          register: cert_fingerprint_raw
+
+        - name: Process fingerprint string
+          set_fact:
+            cert_fingerprint: "{{ cert_fingerprint_raw.stdout | regex_replace(':', '') | lower | regex_search('(?<==).*') }}"
+      when: "'BDA' in group_names"
+
+    - name: "Change the permision file"
+      file:
+        path: "{{ item }}"
+        state: directory
+        mode: '0766'
+        group: kibana
+        owner: kibana
+        recurse: true
+      with_items: 
+        - "{{ kibana_certs_directory_path }}"
+
+  when: "'BDA' in group_names"

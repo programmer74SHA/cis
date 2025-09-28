@@ -1,0 +1,8 @@
+server {{ ntp_server_ip }} key {{ chrony_key_id }}
+driftfile /var/lib/chrony/drift
+logdir {{ chrony_logdir }}
+log measurements statistics tracking
+keyfile {{ chrony_key_file_path }}
+local stratum 10
+initstepslew 20 {{ ntp_server_ip }}
+allow {{ ntp_server_ip }}

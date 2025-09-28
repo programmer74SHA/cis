@@ -1,0 +1,21 @@
+- name: config elk templates
+  block:
+    - name: config kibana data views
+      import_tasks: config_data_views.yml
+    
+    - name: create dynamic templates
+      import_tasks: config_dynamic_templates.yml    
+      
+    - name : config fleet globals
+      import_tasks: config_fleet_globals.yml
+
+    - name : config data sets template
+      import_tasks: config_data_sets_template.yml
+
+    - name : configure general template
+      import_tasks: config_general_template.yml
+
+    - name : configure security_alerts template
+      import_tasks: config_security_alerts_template.yml
+  when: "'BDA' in group_names"
+  tags: [simple, cluster]

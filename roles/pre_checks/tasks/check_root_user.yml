@@ -1,0 +1,10 @@
+---
+- name: Fail if user is not root
+  block:
+    - name: Check if playbook is running as root
+      command: whoami
+      register: system_user
+
+    - name: Stop play if not running as root
+      meta: end_play
+      when: system_user.stdout != "root"

@@ -1,0 +1,39 @@
+---
+# roles/install_logstash/templates/docker-compose-logstash.yml.j2 (NEW FILE)
+version: '3.8'
+
+services:
+  logstash:
+    image: {{ logstash_docker_image }}:{{ logstash_version }}
+    container_name: logstash-{{ inventory_hostname }}
+    restart: always
+    environment:
+      - "LS_JAVA_OPTS=-Xms{{ logstash_heap_size }} -Xmx{{ logstash_heap_size }}"
+      - LOGSTASH_KEYSTORE_PASS={{ logstash_keystore_password }}
+    ports:
+      - "5044:5044"   # Beats input
+      - "5046:5046"   # NBA input
+      - "5049:5049"   # Agentless input
+      - "9600:9600"   # API port
+    volumes:
+      - {{ logstash_data_path }}:/usr/share/logstash/data
+      - {{ logstash_logs_path }}:/usr/share/logstash/logs
+      - {{ logstash_config_path }}/logstash.yml:/usr/share/logstash/config/logstash.yml:ro
+      - {{ logstash_config_path }}/jvm.options:/usr/share/logstash/config/jvm.options:ro
+      - {{ logstash_pipeline_path }}:/usr/share/logstash/pipeline:ro
+      - {{ logstash_certs_path }}:/usr/share/logstash/config/certs:ro
+    networks:
+      - elastic
+      - logstash
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9600/_node/stats || exit 1"]
+      interval: 30s
+      timeout: 30s
+      retries: 5
+      start_period: 120s
+
+networks:
+  elastic:
+    external: true
+  logstash:
+    driver: bridge

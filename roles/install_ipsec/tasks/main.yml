@@ -1,0 +1,12 @@
+---
+- name: install ipsec role
+  block:
+    - name: generate ca file
+      import_tasks: generate_ca.yml
+
+    - name: install ipsec
+      import_tasks: install_ipsec.yml
+  tags:
+        - cluster
+        - simple  
+  when: "'BDA' in group_names"

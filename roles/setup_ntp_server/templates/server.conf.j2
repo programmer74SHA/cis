@@ -1,0 +1,24 @@
+{% if ntp_servers is defined and ntp_servers != "" %}
+{% for server in ntp_servers | split(',') %}
+server {{ server }} iburst
+{% endfor %}
+makestep 10 3
+logchange 0.5
+rtconutc
+{% endif %}
+
+{% if ntp_servers is not defined or ntp_servers == "" %}
+initstepslew 10 {{ ntp_clients | join(' ') }}
+local stratum 8
+manual
+{% endif %}
+
+{% for client in ntp_clients | list %}
+allow {{ client }}
+{% endfor %}
+
+log tracking measurements statistics
+logdir {{ chrony_logdir }}
+rtcsync
+driftfile /var/lib/chrony/drift
+keyfile {{ chrony_key_file_path }}

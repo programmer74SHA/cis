@@ -1,0 +1,5 @@
+- name: "Install rsync package on update"
+  apt:
+    name: rsync
+    state: present
+  tags: update

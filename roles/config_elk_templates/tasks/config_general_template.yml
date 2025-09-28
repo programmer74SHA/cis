@@ -1,0 +1,11 @@
+- name: configure general template
+  uri:
+    url: "{{ elastic_address }}/_index_template/general-logs?pretty"
+    method: PUT
+    body: "{{ lookup('file', 'files/general_logs_template.json') }}"
+    body_format: json
+    headers:
+      Content-Type: application/json
+    user: "{{ elk_user }}"
+    password: "{{ elk_password }}"
+    validate_certs: no

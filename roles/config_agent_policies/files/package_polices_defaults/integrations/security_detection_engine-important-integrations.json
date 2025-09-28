@@ -1,0 +1,12 @@
+{
+  "id": "security_detection_engine-important-integrations",
+  "name": "security_detection_engine (important-integrations)",
+  "namespace": "",
+  "policy_id": "important-integrations",
+  "enabled": true,
+  "package": {
+    "name": "security_detection_engine",
+    "version": ""
+  },
+  "inputs": []
+}

@@ -1,0 +1,9 @@
+instances:
+{% for host in groups['all'] %}
+  - name: "{{ hostvars[host]['inventory_hostname'] }}"
+    filename: "{{ hostvars[host]['inventory_hostname'] }}"
+{% endfor %} 
+  - name: "fleet-server"
+    filename: "fleet-server"
+  - name: "kibana"
+    filename: "kibana"

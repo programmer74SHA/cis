@@ -1,0 +1,14 @@
+- name: generate setupinfo
+  block:
+    - name: Ensure siem directory exists
+      file:
+        path: /etc/siem
+        state: directory
+
+    - name: generate setupinfo
+      template:
+        src: templates/setupinfo.j2
+        dest: /etc/siem/setupinfo
+  when: "'BDA' in group_names "
+  tags: [simple, cluster]
+

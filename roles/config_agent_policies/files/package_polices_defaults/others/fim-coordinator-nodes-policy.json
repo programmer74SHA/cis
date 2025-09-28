@@ -1,0 +1,131 @@
+{
+  "id": "fim-coordinator-nodes-policy",
+  "name": "fim (coordinator-nodes-policy)",
+  "namespace": "",
+  "policy_id": "coordinator-nodes-policy",
+  "enabled": true,
+  "package": {
+    "name": "fim",
+    "version": ""
+  },
+  "inputs": [
+    {
+      "type": "audit/file_integrity",
+      "policy_template": "fim",
+      "enabled": true,
+      "streams": [
+        {
+          "enabled": true,
+          "data_stream": {
+            "type": "logs",
+            "dataset": "fim.event"
+          },
+          "compiled_stream": {
+            "type": "audit/file_integrity",
+            "paths": [
+              "/bin",
+              "/usr/bin",
+              "/sbin",
+              "/usr/sbin",
+              "/etc"
+            ],
+            "recursive": false,
+            "scan_at_start": true,
+            "backend": "auto",
+            "hash_types": [
+              "sha1"
+            ],
+            "max_file_size": "100 MiB",
+            "scan_rate_per_sec": "50 MiB",
+            "exclude_files": [
+              "(?i)\\.sw[nop]$",
+              "~$",
+              "/\\.git($|/)",
+              "\\.tmp$",
+              "\\.log$",
+              "\\.db$"
+            ],
+            "include_files": null,
+            "keep_null": false,
+            "tags": [
+              "fim-event"
+            ],
+            "processors": [
+              {
+                "add_host_metadata": {
+                  "replace_fields": true
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "vars": {
+    "paths": {
+      "value": [
+        "/bin",
+        "/usr/bin",
+        "/sbin",
+        "/usr/sbin",
+        "/etc"
+      ],
+      "type": "text"
+    },
+    "recursive": {
+      "value": false,
+      "type": "bool"
+    },
+    "scan_at_start": {
+      "value": true,
+      "type": "bool"
+    },
+    "hash_types": {
+      "value": [
+        "sha1"
+      ],
+      "type": "text"
+    },
+    "backend": {
+      "value": "auto",
+      "type": "select"
+    },
+    "max_file_size": {
+      "value": "100 MiB",
+      "type": "text"
+    },
+    "scan_rate_per_sec": {
+      "value": "50 MiB",
+      "type": "text"
+    },
+    "include_files": {
+      "value": [],
+      "type": "text"
+    },
+    "exclude_files": {
+      "value": [
+        "(?i)\\.sw[nop]$",
+        "~$",
+        "/\\.git($|/)",
+        "\\.tmp$",
+        "\\.log$",
+        "\\.db$"
+      ],
+      "type": "text"
+    },
+    "keep_null": {
+      "value": false,
+      "type": "bool"
+    },
+    "tags": {
+      "value": [
+        "fim-event"
+      ],
+      "type": "text"
+    },
+    "processors": {
+      "type": "yaml"
+    }
+  }
+}

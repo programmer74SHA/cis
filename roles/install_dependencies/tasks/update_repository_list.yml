@@ -1,0 +1,3 @@
+- name: Update all hosts apt repository lists
+  apt:
+    update_cache: yes
