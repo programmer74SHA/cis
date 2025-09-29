@@ -1,0 +1,87 @@
+---
+# roles/install_kibana/tasks/deploy_kibana.yml
+# Deploy Kibana using Docker Compose
+
+- name: Verify docker-compose file exists
+  stat:
+    path: "{{ kibana_compose_path }}"
+  register: compose_file_exists
+
+- name: Fail if docker-compose file is missing
+  fail:
+    msg: |
+      Docker-compose file not found at {{ kibana_compose_path }}
+      Please run the configure_kibana task first.
+  when: not compose_file_exists.stat.exists
+
+- name: Check if elastic network exists
+  shell: docker network ls | grep -q "elastic"
+  register: network_exists
+  failed_when: false
+  changed_when: false
+
+- name: Create elastic network if it doesn't exist
+  docker_network:
+    name: elastic
+    driver: bridge
+    ipam_config:
+      - subnet: "{{ docker_network_subnet }}"
+        gateway: "192.168.180.1"
+  when: network_exists.rc != 0
+
+- name: Stop existing Kibana container if running
+  shell: |
+    cd {{ kibana_docker_path }}
+    docker-compose down
+  ignore_errors: true
+
+- name: Start Kibana Docker containers
+  shell: |
+    cd {{ kibana_docker_path }}
+    docker-compose up -d
+  register: kibana_start_result
+
+- name: Display container startup result
+  debug:
+    msg: |
+      Kibana container startup:
+      {{ kibana_start_result.stdout }}
+      {% if kibana_start_result.stderr %}
+      Errors: {{ kibana_start_result.stderr }}
+      {% endif %}
+
+- name: Wait for Kibana container to be running
+  shell: docker ps --format "table {% raw %}{{.Names}}\t{{.Status}}{% endraw %}" | grep kibana-{{ inventory_hostname }}
+  register: container_status
+  until: "'Up' in container_status.stdout"
+  retries: 10
+  delay: 10
+  ignore_errors: true
+
+- name: Display container status
+  debug:
+    msg: "Kibana container status: {{ container_status.stdout }}"
+
+- name: Show final status and access information
+  debug:
+    msg: |
+      🚀 Kibana Docker Deployment Status
+      =================================
+      
+      Container: kibana-{{ inventory_hostname }}
+      Status: {{ 'Running' if 'Up' in container_status.stdout else 'Starting' }}
+      
+      🌐 Access Information:
+      - Kibana URL: https://{{ ansible_default_ipv4.address }}:5601
+      - Username: {{ kibana_elasticsearch_username }}
+      - Authentication: {{ 'Service Token' if es_service_token is defined else 'Password' }}
+      
+      🔧 Troubleshooting Commands:
+      # Check container status
+      docker ps | grep kibana
+      
+      # Check container logs
+      docker logs kibana-{{ inventory_hostname }}
+      
+      # Restart Kibana
+      cd {{ kibana_docker_path }} && docker-compose restart

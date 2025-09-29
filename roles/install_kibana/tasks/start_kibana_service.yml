@@ -25,7 +25,7 @@
         driver: bridge
         ipam_config:
           - subnet: "172.20.0.0/16"
-            gateway: "172.20.0.1"
+            gateway: "192.168.180.1"
       when: network_exists.rc != 0
 
     - name: "Stop existing Kibana container if running"

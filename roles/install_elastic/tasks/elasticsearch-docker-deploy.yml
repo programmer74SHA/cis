@@ -1,214 +1,41 @@
 ---
 # roles/install_elastic/tasks/elasticsearch-docker-deploy.yml
-# FIXED: Better error handling and YAML validation
+# FIXED: Simplified Docker deployment task
 
 - name: Display Docker deployment banner
   debug:
     msg: |
-      🐳 Elasticsearch Docker Image Deployment
-      ======================================
+      🐳 Elasticsearch Docker Deployment
+      =================================
       Host: {{ inventory_hostname }}
-      Deployment Type: {{ 'Multi-node' if elasticsearch_nodes | length > 1 else 'Single-node' }}
       Nodes: {{ elasticsearch_nodes | length }}
 
-- name: Check if Docker image file exists in files directory
+- name: Create Docker network for Elasticsearch
+  docker_network:
+    name: elastic
+    driver: bridge
+    ipam_config:
+      - subnet: "{{ docker_network_subnet }}"
+        gateway: "192.168.180.1"
+  ignore_errors: true
+
+- name: Check if Docker Compose file exists
   stat:
-    path: "{{ role_path }}/files/elasticsearch-{{ es_version }}-docker.tar.gz"
-  register: image_file_exists
-  delegate_to: localhost
-  run_once: true
-
-- name: Display Docker image file status
-  debug:
-    msg: |
-      Docker image file status:
-      - Expected path: {{ role_path }}/files/elasticsearch-{{ es_version }}-docker.tar.gz
-      - File exists: {{ image_file_exists.stat.exists }}
-      - File size: {{ image_file_exists.stat.size | default('N/A') }} bytes
-  run_once: true
-
-- name: Create cache directory for Docker images
-  file:
-    path: /var/cache/siem
-    state: directory
-    mode: '0755'
-
-- name: Check if Elasticsearch Docker image already exists locally
-  shell: docker images | grep "{{ elasticsearch_docker_image }}" | grep "{{ es_version }}"
-  register: local_image_check
-  failed_when: false
-  changed_when: false
-
-- name: Copy Elasticsearch Docker image if not present
-  copy:
-    src: files/elasticsearch-{{ es_version }}-docker.tar.gz
-    dest: /var/cache/siem/elasticsearch-{{ es_version }}-docker.tar.gz
-    mode: '0644'
-  when: 
-    - local_image_check.rc != 0
-    - image_file_exists.stat.exists
-
-- name: Load Elasticsearch Docker image if not present
-  shell: docker load -i /var/cache/siem/elasticsearch-{{ es_version }}-docker.tar.gz
-  when: 
-    - local_image_check.rc != 0
-    - image_file_exists.stat.exists
-  register: docker_load_result
-
-- name: Remove temporary Docker image file
-  file:
-    path: /var/cache/siem/elasticsearch-{{ es_version }}-docker.tar.gz
-    state: absent
-  when: 
-    - local_image_check.rc != 0
-    - image_file_exists.stat.exists
-
-- name: Verify Elasticsearch Docker image exists after loading
-  shell: docker images | grep "{{ elasticsearch_docker_image }}" | grep "{{ es_version }}"
-  register: image_verification_after_load
-  failed_when: image_verification_after_load.rc != 0
-  changed_when: false
-
-- name: Display found image
-  debug:
-    msg: "Found local Elasticsearch image: {{ image_verification_after_load.stdout }}"
-
-# FIXED: Properly handle template selection based on deployment type
-- name: Detect deployment type
-  set_fact:
-    is_multi_node_deployment: "{{ elasticsearch_nodes | length > 1 }}"
-
-- name: Set elasticsearch_node_roles for single-node compatibility
-  set_fact:
-    elasticsearch_node_roles: "{{ elasticsearch_nodes[0].roles }}"
-  when: not is_multi_node_deployment
-
-- name: Remove any existing docker-compose file to force regeneration
-  file:
     path: "{{ elasticsearch_compose_path }}"
-    state: absent
+  register: compose_file_exists
 
-- name: Generate Multi-Node Docker Compose file
-  template:
-    src: docker-compose-multinode.yml.j2
-    dest: "{{ elasticsearch_compose_path }}"
-    mode: '0644'
-  register: compose_config
-  when: is_multi_node_deployment
+- name: Fail if Docker Compose file is missing
+  fail:
+    msg: "Docker Compose file not found at {{ elasticsearch_compose_path }}"
+  when: not compose_file_exists.stat.exists
 
-- name: Generate Single-Node Docker Compose file
-  template:
-    src: docker-compose.yml.j2
-    dest: "{{ elasticsearch_compose_path }}"
-    mode: '0644'
-  register: compose_config
-  when: not is_multi_node_deployment
-
-- name: Validate docker-compose file syntax
-  block:
-    - name: Check if docker-compose file was created
-      stat:
-        path: "{{ elasticsearch_compose_path }}"
-      register: compose_file_check
-
-    - name: Fail if compose file was not created
-      fail:
-        msg: "Docker-compose file was not created at {{ elasticsearch_compose_path }}"
-      when: not compose_file_check.stat.exists
-
-    - name: Validate YAML syntax using docker-compose
-      shell: |
-        cd {{ elasticsearch_docker_path }}
-        docker-compose config --quiet
-      register: yaml_validation
-      failed_when: yaml_validation.rc != 0
-
-    - name: Display validation success
-      debug:
-        msg: "✅ Docker-compose file validation passed"
-
-  rescue:
-    - name: Handle YAML validation failure
-      block:
-        - name: Show docker-compose file content for debugging
-          shell: cat {{ elasticsearch_compose_path }}
-          register: compose_content
-
-        - name: Display problematic compose file
-          debug:
-            msg: |
-              ❌ Docker-compose file validation failed!
-              
-              File location: {{ elasticsearch_compose_path }}
-              
-              Content:
-              {{ compose_content.stdout }}
-              
-              Validation error:
-              {{ yaml_validation.stderr | default('Unknown error') }}
-
-        - name: Remove invalid compose file
-          file:
-            path: "{{ elasticsearch_compose_path }}"
-            state: absent
-
-        - name: Fail with detailed error message
-          fail:
-            msg: |
-              Docker-compose file validation failed. The file has been removed.
-              Please check the template syntax and variable values.
-              
-              Common issues:
-              1. Missing or invalid variables in inventory
-              2. Special characters in node names or values
-              3. Jinja2 template syntax errors
-              
-              Re-run the playbook to regenerate the file.
-
-- name: Create environment file
-  copy:
-    dest: "{{ elasticsearch_docker_path }}/.env"
-    mode: '0644'
-    content: |
-      # Elasticsearch Environment Variables
-      # Generated by Ansible
-      
-      # Node Configuration
-      ELASTICSEARCH_NODE_NAME={{ inventory_hostname }}
-      ELASTICSEARCH_CLUSTER_NAME={{ es_cluster_name | default('siem-cluster') }}
-      
-      # Network Configuration
-      ELASTICSEARCH_NETWORK_HOST=0.0.0.0
-      ELASTICSEARCH_HTTP_PORT=9200
-      ELASTICSEARCH_TRANSPORT_PORT=9300
-      
-      # Memory Configuration
-      ELASTICSEARCH_BOOTSTRAP_MEMORY_LOCK=true
-      ELASTICSEARCH_HEAP_SIZE={{ es_heap_size | default('1g') }}
-      
-      # Security Configuration
-      ELASTICSEARCH_XPACK_SECURITY_ENABLED={{ es_enable_security | default('true') }}
-      ELASTICSEARCH_XPACK_SECURITY_HTTP_SSL_ENABLED={{ es_enable_http_ssl | default('true') }}
-      ELASTICSEARCH_XPACK_SECURITY_TRANSPORT_SSL_ENABLED={{ es_enable_transport_ssl | default('true') }}
-      
-      {% if es_api_basic_auth_password is defined %}
-      # Bootstrap Password
-      ELASTIC_PASSWORD={{ es_api_basic_auth_password }}
-      {% endif %}
-      
-      # Performance Settings
-      ELASTICSEARCH_CLUSTER_MAX_SHARDS_PER_NODE=2000
-      ELASTICSEARCH_ACTION_AUTO_CREATE_INDEX=true
-      ELASTICSEARCH_SEARCH_DEFAULT_SEARCH_TIMEOUT=1200s
-
-- name: Stop existing Elasticsearch container if config changed
+- name: Stop existing Elasticsearch containers
   shell: |
     cd {{ elasticsearch_docker_path }}
     docker-compose down
-  when: compose_config.changed
   ignore_errors: true
 
-- name: Deploy Elasticsearch using Docker Compose (local image only)
+- name: Deploy Elasticsearch using Docker Compose
   shell: |
     cd {{ elasticsearch_docker_path }}
     docker-compose up -d
@@ -237,20 +64,13 @@
       =======================================
       
       Host: {{ inventory_hostname }}
-      Deployment Type: {{ 'Multi-node' if is_multi_node_deployment else 'Single-node' }}
-      
-      📊 Container Status:
-      - Expected containers: {{ elasticsearch_nodes | length }}
-      - Running containers: {{ running_containers.stdout | default('Unknown') }}
+      Expected containers: {{ elasticsearch_nodes | length }}
+      Running containers: {{ running_containers.stdout | default('Unknown') }}
       
       📋 Deployed Nodes:
       {% for node in elasticsearch_nodes %}
-      - {{ node.name }}: {{ 'https' if es_enable_http_ssl | default(true) else 'http' }}://{{ ansible_default_ipv4.address }}:{{ es_http_base_port + node.port_offset }}
+      - {{ node.name }}: {{ 'https' if es_enable_http_ssl else 'http' }}://{{ ansible_default_ipv4.address }}:{{ es_http_base_port + node.port_offset }}
       {% endfor %}
-      
-      📁 Files Created:
-      - Docker Compose: {{ elasticsearch_compose_path }}
-      - Environment: {{ elasticsearch_docker_path }}/.env
       
       🔧 Management Commands:
       # View all containers

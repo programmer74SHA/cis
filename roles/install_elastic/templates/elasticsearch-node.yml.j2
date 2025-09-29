@@ -1,0 +1,68 @@
+# roles/install_elastic/templates/elasticsearch-node.yml.j2
+# Elasticsearch configuration for {{ node.name }}
+# Generated: {{ ansible_date_time.iso8601 }}
+
+# ======================== Elasticsearch Configuration =========================
+
+# Cluster
+cluster.name: {{ es_cluster_name }}
+
+# Node
+node.name: {{ node.name }}
+node.roles: {{ node.roles | to_json }}
+node.attr.rack: {{ inventory_hostname }}-rack
+node.attr.zone: {{ inventory_hostname }}-zone
+
+# Paths
+path.data: /usr/share/elasticsearch/data
+path.logs: /usr/share/elasticsearch/logs
+
+# Memory
+bootstrap.memory_lock: true
+
+# Network
+network.host: 0.0.0.0
+http.port: 9200
+transport.port: 9300
+
+# Discovery
+discovery.seed_hosts: [{{ elasticsearch_seed_hosts.split(',') | map('quote') | join(', ') }}]
+cluster.initial_master_nodes: [{{ elasticsearch_master_nodes.split(',') | map('quote') | join(', ') }}]
+
+# Performance
+action.auto_create_index: true
+cluster.max_shards_per_node: 2000
+
+# Security
+xpack.security.enabled: true
+
+{% if es_enable_http_ssl %}
+# HTTP SSL
+xpack.security.http.ssl.enabled: true
+xpack.security.http.ssl.key: /usr/share/elasticsearch/config/certs/{{ node.name }}/{{ node.name }}.key
+xpack.security.http.ssl.certificate: /usr/share/elasticsearch/config/certs/{{ node.name }}/{{ node.name }}.crt
+xpack.security.http.ssl.certificate_authorities: /usr/share/elasticsearch/config/certs/ca/ca.crt
+xpack.security.http.ssl.verification_mode: certificate
+{% endif %}
+
+{% if es_enable_transport_ssl %}
+# Transport SSL
+xpack.security.transport.ssl.enabled: true
+xpack.security.transport.ssl.key: /usr/share/elasticsearch/config/certs/{{ node.name }}/{{ node.name }}.key
+xpack.security.transport.ssl.certificate: /usr/share/elasticsearch/config/certs/{{ node.name }}/{{ node.name }}.crt
+xpack.security.transport.ssl.certificate_authorities: /usr/share/elasticsearch/config/certs/ca/ca.crt
+xpack.security.transport.ssl.verification_mode: certificate
+{% endif %}
+
+# Monitoring
+xpack.monitoring.collection.enabled: true
+
+# Machine Learning
+{% if 'ml' in node.roles %}
+xpack.ml.enabled: true
+{% else %}
+xpack.ml.enabled: false
+{% endif %}
+
+# License
+xpack.license.self_generated.type: basic

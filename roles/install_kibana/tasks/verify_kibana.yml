@@ -2,133 +2,46 @@
 # roles/install_kibana/tasks/verify_kibana.yml
 # Verify Kibana installation and health
 
-- name: Verify Kibana installation and health
-  block:
-    - name: Wait for Kibana container to be running
-      shell: docker ps | grep kibana-{{ inventory_hostname }} | grep -v "Exited"
-      register: kibana_container_check
-      until: kibana_container_check.rc == 0
-      retries: 10
-      delay: 30
-      changed_when: false
+- name: Wait for Kibana container to be running
+  shell: docker ps | grep kibana-{{ inventory_hostname }} | grep -v "Exited"
+  register: kibana_container_check
+  until: kibana_container_check.rc == 0
+  retries: 10
+  delay: 30
+  changed_when: false
 
-    - name: Check Kibana logs for any startup errors
-      shell: docker logs kibana-{{ inventory_hostname }} --tail 50
-      register: kibana_logs
-      changed_when: false
+- name: Wait for Kibana API to be responsive
+  uri:
+    url: "https://{{ ansible_default_ipv4.address }}:5601/api/status"
+    method: GET
+    validate_certs: no
+    timeout: 30
+    status_code: [200, 401]
+  register: kibana_api_health
+  until: kibana_api_health.status in [200, 401]
+  retries: 20
+  delay: 30
 
-    - name: Wait for Kibana API to be responsive
-      uri:
-        url: "https://{{ ansible_default_ipv4.address }}:5601/api/status"
-        method: GET
-        validate_certs: no
-        timeout: 30
-        status_code: [200, 401]
-      register: kibana_api_health
-      until: kibana_api_health.status in [200, 401]
-      retries: 20
-      delay: 30
-
-    - name: Check Kibana-Elasticsearch connection
-      uri:
-        url: "https://{{ ansible_default_ipv4.address }}:5601/api/status"
-        method: GET
-        validate_certs: no
-        return_content: yes
-        timeout: 30
-      register: kibana_status_detail
-      ignore_errors: true
-
-    - name: Verify Fleet configuration (if available)
-      uri:
-        url: "https://{{ ansible_default_ipv4.address }}:5601/api/fleet/settings"
-        method: GET
-        validate_certs: no
-        timeout: 30
-        status_code: [200, 401, 403]
-      register: fleet_status
-      ignore_errors: true
-
-    - name: Display Kibana verification results
-      debug:
-        msg: |
-          ✅ Kibana Verification Results
-          ============================
-          
-          🐳 Container Status: {{ 'Running' if kibana_container_check.rc == 0 else 'Not Running' }}
-          
-          🌐 API Health: {{ 'Responsive' if kibana_api_health.status in [200, 401] else 'Not Responsive' }}
-          
-          🔗 Connection Status:
-          {% if kibana_status_detail.status == 200 %}
-          - Kibana API: ✅ Accessible
-          - Overall Status: {{ kibana_status_detail.json.status.overall.level if kibana_status_detail.json is defined else 'Unknown' }}
-          {% elif kibana_status_detail.status == 401 %}
-          - Kibana API: ⚠️  Authentication required (this is normal)
-          {% else %}
-          - Kibana API: ❌ Not accessible (Status: {{ kibana_status_detail.status | default('Unknown') }})
-          {% endif %}
-          
-          🚢 Fleet Status: {{ 'Available' if fleet_status.status in [200, 401, 403] else 'Not Available' }}
-          
-          📊 Access Information:
-          - Kibana URL: https://{{ ansible_default_ipv4.address }}:5601
-          - Username: {{ kibana_elasticsearch_username | default('elastic') }}
-          - Authentication: {{ 'Service Token' if es_service_token is defined else 'Username/Password' }}
-          
-          🔧 Management Commands:
-          # View Kibana logs:
-          docker logs kibana-{{ inventory_hostname }}
-          
-          # Restart Kibana:
-          cd {{ kibana_docker_path }} && docker-compose restart
-          
-          # Check container status:
-          docker ps | grep kibana
-          
-          # Test API directly:
-          curl -k https://{{ ansible_default_ipv4.address }}:5601/api/status
-
-    - name: Create Kibana verification script
-      template:
-        src: kibana-verification.sh.j2
-        dest: "/usr/share/siem/kibana/kibana-verification.sh"
-        mode: "0755"
-        owner: root
-        group: root
-
-  rescue:
-    - name: Display Kibana verification failure details
-      debug:
-        msg: |
-          ❌ Kibana Verification Failed!
-          =============================
-          
-          🔍 Troubleshooting Steps:
-          
-          1. Check container status:
-             docker ps | grep kibana
-          
-          2. Check container logs:
-             docker logs kibana-{{ inventory_hostname }}
-          
-          3. Check Elasticsearch connectivity:
-             curl -k -u {{ es_api_basic_auth_username }}:PASSWORD https://{{ ansible_default_ipv4.address }}:9200/_cluster/health
-          
-          4. Verify certificates:
-             ls -la {{ kibana_certs_path }}/
-          
-          5. Check configuration:
-             cat {{ kibana_config_path }}/kibana.yml
-          
-          6. Restart services:
-             cd {{ kibana_docker_path }} && docker-compose down && docker-compose up -d
-          
-          📋 Recent Kibana Logs:
-          {{ kibana_logs.stdout if kibana_logs is defined else 'Could not retrieve logs' }}
-
-    - name: Set verification failed flag
-      set_fact:
-        kibana_verification_failed: true
-
-  when: "'BDA' in group_names"
+- name: Display Kibana verification results
+  debug:
+    msg: |
+      ✅ Kibana Verification Results
+      ============================
+      
+      🐳 Container Status: {{ 'Running' if kibana_container_check.rc == 0 else 'Not Running' }}
+      🌐 API Health: {{ 'Responsive' if kibana_api_health.status in [200, 401] else 'Not Responsive' }}
+      
+      📊 Access Information:
+      - Kibana URL: https://{{ ansible_default_ipv4.address }}:5601
+      - Username: {{ kibana_elasticsearch_username }}
+      - Status: {{ 'Ready' if kibana_api_health.status in [200, 401] else 'Starting' }}
+      
+      🔧 Management Commands:
+      # View Kibana logs:
+      docker logs kibana-{{ inventory_hostname }}
+      
+      # Restart Kibana:
+      cd {{ kibana_docker_path }} && docker-compose restart
+      
+      # Check container status:
+      docker ps | grep kibana

@@ -1,38 +1,14 @@
-# Replace roles/install_elastic/templates/jvm.options.j2 with this Docker-compatible version:
-
-## JVM configuration
+# roles/install_elastic/templates/jvm.options.j2
+## JVM configuration for {{ node.name if node is defined else inventory_hostname }}
 
 ################################################################
 ## IMPORTANT: JVM heap size
 ################################################################
-##
-## You should always set the min and max JVM heap
-## size to the same value. For example, to set
-## the heap to 4 GB, set:
-##
-## -Xms4g
-## -Xmx4g
-##
-## See https://www.elastic.co/guide/en/elasticsearch/reference/current/heap-size.html
-## for more information
-##
-################################################################
-
-# Xms represents the initial size of total heap space
-# Xmx represents the maximum size of total heap space
-{% if es_heap_size is defined %}
--Xms{{ es_heap_size }}
--Xmx{{ es_heap_size }}
-{% endif %}
+-Xms{{ node.heap_size if node is defined else '1g' }}
+-Xmx{{ node.heap_size if node is defined else '1g' }}
 
 ################################################################
 ## Expert settings
-################################################################
-##
-## All settings below this section are considered
-## expert settings. Don't tamper with them unless
-## you understand what you are doing
-##
 ################################################################
 
 ## GC configuration
@@ -41,7 +17,6 @@
 8-13:-XX:+UseCMSInitiatingOccupancyOnly
 
 ## G1GC Configuration
-# NOTE: G1 GC is only supported on JDK version 10 or later
 14-:-XX:+UseG1GC
 14-:-XX:G1ReservePercent=25
 14-:-XX:InitiatingHeapOccupancyPercent=30
@@ -50,19 +25,11 @@
 -Djava.io.tmpdir=/tmp
 
 ## heap dumps
-
-# generate a heap dump when an allocation from the Java heap fails
-# heap dumps are created in the working directory of the JVM
 -XX:+HeapDumpOnOutOfMemoryError
-
-# specify an alternative path for heap dumps; ensure the directory exists and
-# has sufficient space (using container path)
 -XX:HeapDumpPath=/usr/share/elasticsearch/data
-
-# specify an alternative path for JVM fatal error logs (using container path)
 -XX:ErrorFile=/usr/share/elasticsearch/logs/hs_err_pid%p.log
 
-## JDK 8 GC logging (using container paths)
+## JDK 8 GC logging
 8:-XX:+PrintGCDetails
 8:-XX:+PrintGCDateStamps
 8:-XX:+PrintTenuringDistribution
@@ -72,10 +39,10 @@
 8:-XX:NumberOfGCLogFiles=32
 8:-XX:GCLogFileSize=64m
 
-# JDK 9+ GC logging (using container paths)
+# JDK 9+ GC logging
 9-:-Xlog:gc*,gc+age=trace,safepoint:file=/usr/share/elasticsearch/logs/gc.log:utctime,pid,tags:filecount=32,filesize=64m
 
-# Ensure compatibility and performance
+# Performance and compatibility
 -XX:+AlwaysPreTouch
 -Xss1m
 -Djava.awt.headless=true
@@ -88,10 +55,3 @@
 -Dio.netty.allocator.numDirectArenas=0
 -Dlog4j.shutdownHookEnabled=false
 -Dlog4j2.disable.jmx=true
-
-{% if es_jvm_custom_parameters is defined and es_jvm_custom_parameters != '' %}
-# Custom JVM parameters
-{% for item in es_jvm_custom_parameters %}
-{{ item }}
-{% endfor %}
-{% endif %}

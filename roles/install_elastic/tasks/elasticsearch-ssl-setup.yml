@@ -1,0 +1,120 @@
+---
+# Fixed SSL setup without loop on block
+
+- name: Install OpenSSL
+  package:
+    name: openssl
+    state: present
+
+- name: Create certificate directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: "1000"
+    group: "1000"
+    mode: "0755"
+  loop:
+    - "{{ certs_base_path }}"
+    - "{{ certs_base_path }}/ca"
+
+- name: Create node certificate directories
+  file:
+    path: "{{ certs_base_path }}/{{ node.name }}"
+    state: directory
+    owner: "1000"
+    group: "1000"
+    mode: "0755"
+  loop: "{{ elasticsearch_nodes }}"
+  loop_control:
+    loop_var: node
+
+- name: Check if CA certificate exists
+  stat:
+    path: "{{ certs_base_path }}/ca/ca.crt"
+  register: ca_exists
+
+- name: Generate CA private key
+  command: openssl genrsa -out {{ certs_base_path }}/ca/ca.key 4096
+  when: not ca_exists.stat.exists
+
+- name: Generate CA certificate
+  command: >
+    openssl req -new -x509 -days 3650
+    -key {{ certs_base_path }}/ca/ca.key
+    -out {{ certs_base_path }}/ca/ca.crt
+    -subj "/C=US/ST=State/L=City/O=APK SIEM/CN=Elasticsearch CA"
+  when: not ca_exists.stat.exists
+
+- name: Set CA permissions
+  file:
+    path: "{{ item.path }}"
+    owner: "1000"
+    group: "1000"
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: "{{ certs_base_path }}/ca/ca.key", mode: "0600" }
+    - { path: "{{ certs_base_path }}/ca/ca.crt", mode: "0644" }
+  when: not ca_exists.stat.exists
+
+# Generate certificates for each node
+- name: Generate private key for each node
+  command: openssl genrsa -out {{ certs_base_path }}/{{ node.name }}/{{ node.name }}.key 2048
+  loop: "{{ elasticsearch_nodes }}"
+  loop_control:
+    loop_var: node
+
+- name: Generate certificate request for each node
+  command: >
+    openssl req -new
+    -key {{ certs_base_path }}/{{ node.name }}/{{ node.name }}.key
+    -out {{ certs_base_path }}/{{ node.name }}/{{ node.name }}.csr
+    -subj "/C=US/ST=State/L=City/O=APK SIEM/CN={{ node.name }}"
+  loop: "{{ elasticsearch_nodes }}"
+  loop_control:
+    loop_var: node
+
+- name: Sign certificate for each node
+  command: >
+    openssl x509 -req -days 365
+    -in {{ certs_base_path }}/{{ node.name }}/{{ node.name }}.csr
+    -CA {{ certs_base_path }}/ca/ca.crt
+    -CAkey {{ certs_base_path }}/ca/ca.key
+    -CAcreateserial
+    -out {{ certs_base_path }}/{{ node.name }}/{{ node.name }}.crt
+  loop: "{{ elasticsearch_nodes }}"
+  loop_control:
+    loop_var: node
+
+- name: Set key permissions
+  file:
+    path: "{{ certs_base_path }}/{{ node.name }}/{{ node.name }}.key"
+    owner: "1000"
+    group: "1000"
+    mode: "0600"
+  loop: "{{ elasticsearch_nodes }}"
+  loop_control:
+    loop_var: node
+
+- name: Set certificate permissions
+  file:
+    path: "{{ certs_base_path }}/{{ node.name }}/{{ node.name }}.crt"
+    owner: "1000"
+    group: "1000"
+    mode: "0644"
+  loop: "{{ elasticsearch_nodes }}"
+  loop_control:
+    loop_var: node
+
+- name: Remove CSR files
+  file:
+    path: "{{ certs_base_path }}/{{ node.name }}/{{ node.name }}.csr"
+    state: absent
+  loop: "{{ elasticsearch_nodes }}"
+  loop_control:
+    loop_var: node
+
+- name: Display certificate setup completion
+  debug:
+    msg: |
+      ✅ SSL certificates created for {{ elasticsearch_nodes | length }} nodes
+      CA: {{ certs_base_path }}/ca/ca.crt
