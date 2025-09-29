@@ -1,10 +1,10 @@
 ---
 # roles/install_elastic/tasks/wait-for-cluster.yml
-# FIXED: Simplified cluster health verification
+# UPDATED: Using hostnames instead of IPs
 
 - name: Wait for Elasticsearch nodes to be responsive
   uri:
-    url: "{{ 'https' if es_enable_http_ssl else 'http' }}://{{ ansible_default_ipv4.address }}:{{ es_http_base_port + node.port_offset }}/"
+    url: "{{ 'https' if es_enable_http_ssl else 'http' }}://{{ hostvars[inventory_hostname].node_hostname }}:{{ es_http_base_port + node.port_offset }}/"
     method: GET
     user: "{{ es_api_basic_auth_username if es_enable_http_ssl else omit }}"
     password: "{{ es_api_basic_auth_password if es_enable_http_ssl else omit }}"
@@ -23,7 +23,7 @@
 
 - name: Get cluster health from first node
   uri:
-    url: "{{ 'https' if es_enable_http_ssl else 'http' }}://{{ ansible_default_ipv4.address }}:{{ es_http_base_port }}/_cluster/health?pretty"
+    url: "{{ 'https' if es_enable_http_ssl else 'http' }}://{{ hostvars[inventory_hostname].node_hostname }}:{{ es_http_base_port }}/_cluster/health?pretty"
     method: GET
     user: "{{ es_api_basic_auth_username if es_enable_http_ssl else omit }}"
     password: "{{ es_api_basic_auth_password if es_enable_http_ssl else omit }}"
@@ -39,7 +39,7 @@
     msg: |
       🏥 Cluster Health Status
       ======================
-      Host: {{ inventory_hostname }}
+      Host: {{ inventory_hostname }} ({{ hostvars[inventory_hostname].node_hostname }})
       Local Nodes: {{ elasticsearch_nodes | length }}
       
       {% if cluster_health is defined and cluster_health.status == 200 %}
@@ -51,9 +51,9 @@
       Cluster Status: Could not retrieve (this is normal during initial setup)
       {% endif %}
       
-      🌐 Local Node Access:
+      🌐 Local Node Access (using hostname):
       {% for node in elasticsearch_nodes %}
-      - {{ node.name }}: {{ 'https' if es_enable_http_ssl else 'http' }}://{{ ansible_default_ipv4.address }}:{{ es_http_base_port + node.port_offset }}
+      - {{ node.name }}: {{ 'https' if es_enable_http_ssl else 'http' }}://{{ hostvars[inventory_hostname].node_hostname }}:{{ es_http_base_port + node.port_offset }}
       {% endfor %}
       
       ✅ All local nodes are responsive!

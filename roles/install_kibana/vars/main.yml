@@ -1,13 +1,18 @@
 ---
 # Docker-specific variables
 kibana_version: "8.18.2"
-kibana_docker_image: "docker.apk-group.net/kibana"  # Fixed to match your repository
-kibana_docker_path: "/usr/share/siem/kibana"
-kibana_data_path: "{{ kibana_docker_path }}/data"
-kibana_logs_path: "{{ kibana_docker_path }}/logs"
-kibana_config_path: "{{ kibana_docker_path }}/config"
-kibana_certs_path: "{{ kibana_docker_path }}/certs"
-kibana_compose_path: "{{ kibana_docker_path }}/docker-compose.yml"
+kibana_docker_image: "docker.apk-group.net/kibana"
+
+# ADDED: Base path variable (should come from inventory but defined here as fallback)
+kibana_base_path: "/usr/share/siem/kibana"
+
+# Kibana paths
+kibana_docker_path: "{{ kibana_base_path }}"
+kibana_data_path: "{{ kibana_base_path }}/data"
+kibana_logs_path: "{{ kibana_base_path }}/logs"
+kibana_config_path: "{{ kibana_base_path }}/config"
+kibana_certs_path: "{{ kibana_base_path }}/certs"
+kibana_compose_path: "{{ kibana_base_path }}/docker-compose.yml"
 
 # Kibana authentication
 kibana_elasticsearch_username: "kibana_system"
@@ -31,9 +36,10 @@ kibana_certificate_organization_name: "APK"
 kibana_certificate_organizational_unit_name: "SIEM"
 kibana_certificate_email_address: "info@apk-group.net"
 
-# SSL certificate paths
+# SSL certificate paths (reference Elasticsearch certs)
 es_ssl_certificate_path: "/usr/share/siem/elasticsearch/certs"
 es_conf_dir: "/usr/share/siem/elasticsearch/config"
+certs_base_path: "/usr/share/siem/elasticsearch/certs"
 
 # Update variables
 kibana_backup_folder: /var/siem/tmp/kibana-backup

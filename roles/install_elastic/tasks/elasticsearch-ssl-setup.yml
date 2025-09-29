@@ -1,5 +1,6 @@
 ---
-# Fixed SSL setup without loop on block
+# roles/install_elastic/tasks/elasticsearch-ssl-setup.yml
+# FIXED: Complete version with proper loop handling
 
 - name: Install OpenSSL
   package:
@@ -56,24 +57,62 @@
     - { path: "{{ certs_base_path }}/ca/ca.crt", mode: "0644" }
   when: not ca_exists.stat.exists
 
-# Generate certificates for each node
+# Generate certificates with hostname SANs for each node
+- name: Create OpenSSL config for each node with hostname SANs
+  copy:
+    dest: "{{ certs_base_path }}/{{ node.name }}/{{ node.name }}.conf"
+    content: |
+      [req]
+      distinguished_name = req_distinguished_name
+      req_extensions = v3_req
+      prompt = no
+
+      [req_distinguished_name]
+      C = US
+      ST = State
+      L = City
+      O = APK SIEM
+      CN = {{ node.name }}
+
+      [v3_req]
+      basicConstraints = CA:FALSE
+      keyUsage = nonRepudiation, digitalSignature, keyEncipherment
+      extendedKeyUsage = serverAuth, clientAuth
+      subjectAltName = @alt_names
+
+      [alt_names]
+      DNS.1 = {{ node.name }}
+      DNS.2 = {{ node.name }}.{{ top_level_domain }}
+      DNS.3 = {{ hostvars[inventory_hostname].node_hostname }}
+      DNS.4 = localhost
+      IP.1 = {{ hostvars[inventory_hostname].ansible_host }}
+      IP.2 = 127.0.0.1
+    mode: "0644"
+  loop: "{{ elasticsearch_nodes }}"
+  loop_control:
+    loop_var: node
+
 - name: Generate private key for each node
   command: openssl genrsa -out {{ certs_base_path }}/{{ node.name }}/{{ node.name }}.key 2048
   loop: "{{ elasticsearch_nodes }}"
   loop_control:
     loop_var: node
+  args:
+    creates: "{{ certs_base_path }}/{{ node.name }}/{{ node.name }}.key"
 
-- name: Generate certificate request for each node
+- name: Generate certificate request for each node with config
   command: >
     openssl req -new
     -key {{ certs_base_path }}/{{ node.name }}/{{ node.name }}.key
     -out {{ certs_base_path }}/{{ node.name }}/{{ node.name }}.csr
-    -subj "/C=US/ST=State/L=City/O=APK SIEM/CN={{ node.name }}"
+    -config {{ certs_base_path }}/{{ node.name }}/{{ node.name }}.conf
   loop: "{{ elasticsearch_nodes }}"
   loop_control:
     loop_var: node
+  args:
+    creates: "{{ certs_base_path }}/{{ node.name }}/{{ node.name }}.csr"
 
-- name: Sign certificate for each node
+- name: Sign certificate for each node with extensions
   command: >
     openssl x509 -req -days 365
     -in {{ certs_base_path }}/{{ node.name }}/{{ node.name }}.csr
@@ -81,9 +120,13 @@
     -CAkey {{ certs_base_path }}/ca/ca.key
     -CAcreateserial
     -out {{ certs_base_path }}/{{ node.name }}/{{ node.name }}.crt
+    -extensions v3_req
+    -extfile {{ certs_base_path }}/{{ node.name }}/{{ node.name }}.conf
   loop: "{{ elasticsearch_nodes }}"
   loop_control:
     loop_var: node
+  args:
+    creates: "{{ certs_base_path }}/{{ node.name }}/{{ node.name }}.crt"
 
 - name: Set key permissions
   file:
@@ -105,7 +148,8 @@
   loop_control:
     loop_var: node
 
-- name: Remove CSR files
+# FIXED: Separate tasks for removing each type of file
+- name: Remove CSR files for each node
   file:
     path: "{{ certs_base_path }}/{{ node.name }}/{{ node.name }}.csr"
     state: absent
@@ -113,8 +157,32 @@
   loop_control:
     loop_var: node
 
+- name: Remove config files for each node
+  file:
+    path: "{{ certs_base_path }}/{{ node.name }}/{{ node.name }}.conf"
+    state: absent
+  loop: "{{ elasticsearch_nodes }}"
+  loop_control:
+    loop_var: node
+
+- name: Verify certificates include hostname SANs
+  shell: |
+    openssl x509 -in {{ certs_base_path }}/{{ node.name }}/{{ node.name }}.crt -noout -text | grep -A 5 "Subject Alternative Name"
+  register: cert_sans
+  loop: "{{ elasticsearch_nodes }}"
+  loop_control:
+    loop_var: node
+  changed_when: false
+  failed_when: false
+
 - name: Display certificate setup completion
   debug:
     msg: |
       ✅ SSL certificates created for {{ elasticsearch_nodes | length }} nodes
       CA: {{ certs_base_path }}/ca/ca.crt
+      Hostnames included in SANs: {{ hostvars[inventory_hostname].node_hostname }}
+      
+      Certificate verification results:
+      {% for result in cert_sans.results %}
+      - {{ result.node.name }}: {{ 'OK' if result.rc == 0 else 'No SANs found' }}
+      {% endfor %}

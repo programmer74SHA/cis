@@ -1,15 +1,21 @@
+# roles/install_kibana/templates/docker-compose-kibana.yml.j2
+# UPDATED: Using host network mode and hostnames
+
 version: '3.8'
 
 services:
   kibana:
     image: {{ kibana_docker_image | default('docker.apk-group.net/kibana') }}:{{ kibana_version | default('8.18.2') }}
     container_name: kibana-{{ inventory_hostname }}
-    hostname: kibana-{{ inventory_hostname }}
+    hostname: {{ hostvars[inventory_hostname].node_hostname }}
     restart: unless-stopped
     
+    # UPDATED: Use host network mode
+    network_mode: host
+    
     environment:
-      # Elasticsearch Configuration
-      - "ELASTICSEARCH_HOSTS={{ kibana_elasticsearch_hosts | default('https://127.0.0.1:9200') }}"
+      # Elasticsearch Configuration - UPDATED: Using hostname
+      - "ELASTICSEARCH_HOSTS=https://{{ hostvars[inventory_hostname].node_hostname }}:9200"
 {%- if es_service_token is defined and es_service_token != '' %}
       - "ELASTICSEARCH_SERVICEACCOUNTTOKEN={{ es_service_token }}"
 {%- else %}
@@ -19,10 +25,11 @@ services:
       - "ELASTICSEARCH_SSL_CERTIFICATEAUTHORITIES=/usr/share/kibana/config/certs/ca/ca.crt"
       - "ELASTICSEARCH_SSL_VERIFICATIONMODE=certificate"
       
-      # Server Configuration
-      - "SERVER_HOST=0.0.0.0"
+      # Server Configuration - UPDATED: Using hostname
+      - "SERVER_HOST={{ hostvars[inventory_hostname].node_hostname }}"
       - "SERVER_PORT=5601"
       - "SERVER_NAME={{ inventory_hostname }}-kibana"
+      - "SERVER_PUBLICBASEURL=https://{{ hostvars[inventory_hostname].node_hostname }}:5601"
       
       # Server SSL Configuration
       - "SERVER_SSL_ENABLED=true"
@@ -44,9 +51,6 @@ services:
       - "TELEMETRY_OPTIN=false"
       - "TELEMETRY_ALLOWCHANGINGOPTINSTATUS=false"
 
-    ports:
-      - "{{ ansible_default_ipv4.address }}:5601:5601"
-
     volumes:
       # Data and logs
       - "{{ kibana_data_path | default('/usr/share/siem/kibana/data') }}:/usr/share/kibana/data:Z"
@@ -58,13 +62,10 @@ services:
       # SSL Certificates
       - "{{ kibana_certs_path | default('/usr/share/siem/kibana/certs') }}:/usr/share/kibana/config/certs:ro,Z"
 
-    networks:
-      - elastic
-
     healthcheck:
       test: 
         - "CMD-SHELL"
-        - "curl -f -k https://localhost:5601/api/status || exit 1"
+        - "curl -f -k https://{{ hostvars[inventory_hostname].node_hostname }}:5601/api/status || exit 1"
       interval: 30s
       timeout: 30s
       retries: 10
@@ -84,11 +85,3 @@ services:
     # Ensure container restarts unless stopped
     restart: unless-stopped
 
-    # Dependencies (optional - Kibana will retry connection)
-    depends_on:
-      - elasticsearch
-    # Note: This depends_on is optional since Elasticsearch might be on a different host
-
-networks:
-  elastic:
-    external: true

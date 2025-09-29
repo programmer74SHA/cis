@@ -1,10 +1,11 @@
 # roles/install_kibana/templates/kibana-docker.yml.j2
-# FIXED: Proper Docker-based Kibana configuration for multi-node setup
+# UPDATED: Using hostnames instead of IPs
 
 # =================== Server Configuration ===================
-server.host: "0.0.0.0"
+server.host: "{{ hostvars[inventory_hostname].node_hostname }}"
 server.port: 5601
 server.name: "{{ inventory_hostname }}-kibana"
+server.publicBaseUrl: "https://{{ hostvars[inventory_hostname].node_hostname }}:5601"
 
 # SSL Configuration for Kibana server
 server.ssl.enabled: true
@@ -31,8 +32,8 @@ logging:
 pid.file: /usr/share/kibana/data/kibana.pid
 
 # =================== Elasticsearch Configuration ===================
-# Primary Elasticsearch connection (BDA node)
-elasticsearch.hosts: ['https://{{ ansible_default_ipv4.address }}:9200']
+# Primary Elasticsearch connection - UPDATED: Using hostname
+elasticsearch.hosts: ['https://{{ hostvars[inventory_hostname].node_hostname }}:9200']
 elasticsearch.ssl.certificateAuthorities: [/usr/share/kibana/config/certs/ca/ca.crt]
 elasticsearch.ssl.verificationMode: certificate
 
@@ -46,7 +47,7 @@ elasticsearch.password: "{{ kibana_elasticsearch_password | default('YourVerySec
 {% endif %}
 
 # =================== Fleet Configuration ===================
-# Fleet outputs for Elastic Agent management
+# Fleet outputs for Elastic Agent management - UPDATED: Using hostnames
 xpack.fleet.outputs:
   - id: fleet-default-output
     name: default
@@ -59,7 +60,7 @@ xpack.fleet.outputs:
       - "{{ host }}"
 {% endfor %}
 {% else %}
-      - "https://{{ ansible_default_ipv4.address }}:9200"
+      - "https://{{ hostvars[inventory_hostname].node_hostname }}:9200"
 {% endif %}
 {% if cert_fingerprint is defined %}
     ca_trusted_fingerprint: {{ cert_fingerprint }}
@@ -67,8 +68,8 @@ xpack.fleet.outputs:
     ssl:
       verification_mode: 'none'
 
-# Fleet registry for air-gapped environments
-xpack.fleet.registryUrl: "http://127.0.0.1:8443"
+# Fleet registry for air-gapped environments - UPDATED: Using hostname
+xpack.fleet.registryUrl: "http://{{ hostvars[inventory_hostname].node_hostname }}:8443"
 xpack.fleet.packageVerification.gpgKeyPath: "/usr/share/kibana/config/GPG-KEY-elastic-agent"
 xpack.fleet.isAirGapped: true
 
@@ -104,8 +105,8 @@ xpack.security.session.lifespan: "12h"
 monitoring.ui.ccs.enabled: false
 
 # =================== Maps Configuration ===================
-# Custom map service URL for air-gapped environments
-map.emsUrl: https://{{ ansible_default_ipv4.address }}:8082
+# Custom map service URL - UPDATED: Using hostname
+map.emsUrl: https://{{ hostvars[inventory_hostname].node_hostname }}:8082
 
 # =================== Performance Configuration ===================
 # Request timeout for Elasticsearch operations
@@ -144,9 +145,9 @@ xpack.actions.enabled: true
 
 # =================== Reporting Configuration ===================
 {% if enable_reporting | default(true) %}
-# Reporting configuration
+# Reporting configuration - UPDATED: Using hostname
 xpack.reporting.enabled: true
-xpack.reporting.kibanaServer.hostname: "{{ ansible_default_ipv4.address }}"
+xpack.reporting.kibanaServer.hostname: "{{ hostvars[inventory_hostname].node_hostname }}"
 xpack.reporting.kibanaServer.port: 5601
 xpack.reporting.kibanaServer.protocol: "https"
 {% endif %}
@@ -173,8 +174,9 @@ server.cors.allowOrigin: "*"
 
 # Configuration Summary:
 # - Generated: {{ ansible_date_time.iso8601 }}
-# - Host: {{ inventory_hostname }} ({{ ansible_default_ipv4.address }})
-# - Elasticsearch: {{ ansible_default_ipv4.address }}:9200
+# - Host: {{ inventory_hostname }} ({{ hostvars[inventory_hostname].node_hostname }})
+# - Elasticsearch: {{ hostvars[inventory_hostname].node_hostname }}:9200
+# - Network Mode: host
 # - Fleet Outputs: {{ fleet_outputs_hosts | length if fleet_outputs_hosts is defined else 1 }} configured
 # - SSL: Enabled with custom certificates
 # - Authentication: {{ 'Service Token' if es_service_token is defined else 'Username/Password' }}

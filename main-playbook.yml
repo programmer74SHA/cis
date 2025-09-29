@@ -1,4 +1,5 @@
-- name: "APK SIEM Product Installer - Fixed Version"
+---
+- name: "APK SIEM ELK Cluster Installer - Fixed & Simplified Version"
   hosts: all
   serial: "{{ ansible_serial | default('100%') }}"
   gather_facts: true
@@ -8,63 +9,92 @@
       set_fact:
         deployment_start_time: "{{ ansible_date_time.iso8601 }}"
         
+    - name: Display deployment banner
+      debug:
+        msg: |
+          ╔══════════════════════════════════════════════════════════════╗
+          ║              APK SIEM ELK CLUSTER DEPLOYMENT                 ║
+          ╠══════════════════════════════════════════════════════════════╣
+          ║ Host: {{ inventory_hostname }}                               ║
+          ║ IP: {{ ansible_default_ipv4.address }}                       ║
+          ║ Groups: {{ group_names | join(', ') }}                       ║
+          ║ Start Time: {{ deployment_start_time }}                      ║
+          ╚══════════════════════════════════════════════════════════════╝
+        
   roles:
-    - pre_checks
-    - add-new-node
-    # - deploy_apt_repository 
-    # - install_dependencies 
+    # Pre-flight checks
+    - role: pre_checks
+      tags: [always]
     
-    # Install Elasticsearch first on all nodes
+    # Node identification
+    - role: add-new-node
+      tags: [always]
+    
+    # Install Elasticsearch on all nodes with elasticsearch_nodes defined
     - role: install_elastic
       when: >
-        ('ELASTICSEARCH' in group_names) or 
+        ('ELASTICSEARCH' in group_names) and 
         (hostvars[inventory_hostname].get('elasticsearch_nodes', []) | length > 0)
       tags: [cluster, simple, elasticsearch]
     
-    # Install Kibana specifically on BDA nodes after Elasticsearch is ready
-    - role: install_kibana
-      when: >
-        ('BDA' in group_names) or 
-        (hostvars[inventory_hostname].get('install_kibana', false) | bool)
-      tags: [cluster, simple, kibana]
+  #   # Install Kibana only on BDA nodes
+  #   - role: install_kibana
+  #     when: >
+  #       ('BDA' in group_names) and 
+  #       (hostvars[inventory_hostname].get('install_kibana', false) | bool)
+  #     tags: [cluster, simple, kibana]
     
-    # Continue with other services
-    # - deploy_nba_node
-    # - setup_nfs
-    # - setup_ntp_server
-    # - integrations_server
-    # - elasticsearch_artifacts
-    # - elasticsearch-maps-server
-    # - install_logstash
-    # - wait_for_elasticsearch_and_kibana
-    # - config_fleet_settings
-    # - config_outputs
-    # - config_agent_policies
-    # - import_ingest_pipelines
-    # - config_elk_templates
-    # - install_kaf
-    # - install_elastic_agent
-    # - copy_fleet
-    # - health_check
-    # - versioning
-    
-  post_tasks:
-    - name: Display deployment completion status
-      debug:
-        msg: |
-          
-          === SIEM DEPLOYMENT COMPLETED ===
-          
-          Start Time: {{ deployment_start_time }}
-          End Time: {{ ansible_date_time.iso8601 }}
-          
-          Elasticsearch Nodes: {{ hostvars[inventory_hostname].get('elasticsearch_nodes', []) | length }}
-          Kibana Installed: {{ ('BDA' in group_names) | ternary('Yes', 'No') }}
-          
-          Next Steps:
-          1. Verify cluster: curl -k -u elastic:PASSWORD https://{{ ansible_default_ipv4.address }}:9200/_cat/nodes?v
-          2. Access Kibana: http://{{ ansible_default_ipv4.address if 'BDA' in group_names else 'BDA_HOST' }}:5601
-          3. Run health check: /usr/share/siem/elasticsearch/cluster-verification.sh
-      when: inventory_hostname in groups.get('BDA', [])
+  # post_tasks:
+  #   - name: Display deployment completion status
+  #     debug:
+  #       msg: |
+  #         ╔══════════════════════════════════════════════════════════════╗
+  #         ║                DEPLOYMENT COMPLETED SUCCESSFULLY             ║
+  #         ╠══════════════════════════════════════════════════════════════╣
+  #         ║ Host: {{ inventory_hostname }}                               ║
+  #         ║ Start Time: {{ deployment_start_time }}                      ║
+  #         ║ End Time: {{ ansible_date_time.iso8601 }}                    ║
+  #         ║                                                              ║
+  #         ║ Services Deployed:                                           ║
+  #         {% if hostvars[inventory_hostname].get('elasticsearch_nodes', []) | length > 0 %}
+  #         ║ ✅ Elasticsearch: {{ hostvars[inventory_hostname].get('elasticsearch_nodes', []) | length }} nodes ║
+  #         {% endif %}
+  #         {% if 'BDA' in group_names and hostvars[inventory_hostname].get('install_kibana', false) %}
+  #         ║ ✅ Kibana: Management Interface                              ║
+  #         {% endif %}
+  #         ║                                                              ║
+  #         ║ Access Information:                                          ║
+  #         {% if hostvars[inventory_hostname].get('elasticsearch_nodes', []) | length > 0 %}
+  #         ║ 🔗 Elasticsearch: https://{{ ansible_default_ipv4.address }}:9200  ║
+  #         {% endif %}
+  #         {% if 'BDA' in group_names and hostvars[inventory_hostname].get('install_kibana', false) %}
+  #         ║ 🔗 Kibana: https://{{ ansible_default_ipv4.address }}:5601          ║
+  #         ║ 👤 Username: elastic                                         ║
+  #         ║ 🔑 Password: [Check inventory file]                          ║
+  #         {% endif %}
+  #         ║                                                              ║
+  #         ║ Management Commands:                                         ║
+  #         ║ # Verify cluster health:                                     ║
+  #         ║ curl -k -u elastic:PASSWORD \                               ║
+  #         ║   https://{{ ansible_default_ipv4.address }}:9200/_cluster/health        ║
+  #         ║                                                              ║
+  #         ║ # Check containers:                                          ║
+  #         ║ docker ps                                                    ║
+  #         ║                                                              ║
+  #         ║ # View logs:                                                 ║
+  #         ║ docker logs [container-name]                                ║
+  #         ╚══════════════════════════════════════════════════════════════╝
+  #     when: >
+  #       (inventory_hostname in groups.get('BDA', [])) or 
+  #       (inventory_hostname in groups.get('ELASTICSEARCH', []))
+        
+  #   - name: Create cluster verification script
+  #     template:
+  #       src: cluster-verification.sh.j2
+  #       dest: "{{ siem_base_path }}/cluster-verification.sh"
+  #       mode: "0755"
+  #       owner: root
+  #       group: root
+  #     when: inventory_hostname in groups.get('BDA', [])
       
-  tags: [cluster, simple]
+  # tags: [cluster, simple]

@@ -1,6 +1,7 @@
 # roles/install_elastic/templates/elasticsearch-node.yml.j2
 # Elasticsearch configuration for {{ node.name }}
 # Generated: {{ ansible_date_time.iso8601 }}
+# UPDATED: Using hostnames instead of IPs
 
 # ======================== Elasticsearch Configuration =========================
 
@@ -12,6 +13,7 @@ node.name: {{ node.name }}
 node.roles: {{ node.roles | to_json }}
 node.attr.rack: {{ inventory_hostname }}-rack
 node.attr.zone: {{ inventory_hostname }}-zone
+node.attr.hostname: {{ hostvars[inventory_hostname].node_hostname }}
 
 # Paths
 path.data: /usr/share/elasticsearch/data
@@ -20,14 +22,22 @@ path.logs: /usr/share/elasticsearch/logs
 # Memory
 bootstrap.memory_lock: true
 
-# Network
-network.host: 0.0.0.0
-http.port: 9200
-transport.port: 9300
+# Network - UPDATED: Using hostname instead of 0.0.0.0
+network.host: {{ hostvars[inventory_hostname].node_hostname }}
+network.publish_host: {{ hostvars[inventory_hostname].node_hostname }}
+http.port: {{ (es_http_base_port | int) + (node.port_offset | int) }}
+transport.port: {{ (es_transport_base_port | int) + (node.port_offset | int) }}
 
-# Discovery
-discovery.seed_hosts: [{{ elasticsearch_seed_hosts.split(',') | map('quote') | join(', ') }}]
-cluster.initial_master_nodes: [{{ elasticsearch_master_nodes.split(',') | map('quote') | join(', ') }}]
+# Discovery - UPDATED: Using hostnames with ports
+discovery.seed_hosts: 
+{% for host in elasticsearch_seed_hosts_list %}
+  - "{{ host }}"
+{% endfor %}
+
+cluster.initial_master_nodes:
+{% for node_name in elasticsearch_master_node_names %}
+  - "{{ node_name }}"
+{% endfor %}
 
 # Performance
 action.auto_create_index: true

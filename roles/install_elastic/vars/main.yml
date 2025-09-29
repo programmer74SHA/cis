@@ -5,20 +5,25 @@
 es_version: "8.18.2"
 elasticsearch_docker_image: "docker.apk-group.net/elasticsearch"
 
+# ADDED: Base paths that were missing
+elasticsearch_base_path: "/usr/share/siem/elasticsearch"
+certs_base_path: "/usr/share/siem/elasticsearch/certs"
+kibana_base_path: "/usr/share/siem/kibana"
+
 # Docker Configuration (CRITICAL - MUST MATCH ACTUAL PATHS)
-elasticsearch_docker_path: "/usr/share/siem/elasticsearch"
-elasticsearch_data_path: "{{ elasticsearch_docker_path }}/data"
-elasticsearch_logs_path: "{{ elasticsearch_docker_path }}/logs"
-elasticsearch_config_path: "{{ elasticsearch_docker_path }}/config" 
-elasticsearch_certs_path: "{{ elasticsearch_docker_path }}/certs"
-elasticsearch_compose_path: "{{ elasticsearch_docker_path }}/docker-compose.yml"
+elasticsearch_docker_path: "{{ elasticsearch_base_path }}"
+elasticsearch_data_path: "{{ elasticsearch_base_path }}/data"
+elasticsearch_logs_path: "{{ elasticsearch_base_path }}/logs"
+elasticsearch_config_path: "{{ elasticsearch_base_path }}/config" 
+elasticsearch_certs_path: "{{ certs_base_path }}"
+elasticsearch_compose_path: "{{ elasticsearch_base_path }}/docker-compose.yml"
 
 # Network Configuration
 es_http_base_port: 9200
 es_transport_base_port: 9300
 
 # SSL Certificate Configuration (CRITICAL - MUST BE CORRECT)
-es_ssl_certificate_path: "{{ elasticsearch_certs_path }}"
+es_ssl_certificate_path: "{{ certs_base_path }}"
 es_enable_http_ssl: true
 es_enable_transport_ssl: true
 es_enable_security: true

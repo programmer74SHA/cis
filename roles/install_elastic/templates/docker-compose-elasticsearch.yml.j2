@@ -1,5 +1,5 @@
 # roles/install_elastic/templates/docker-compose-elasticsearch.yml.j2
-# FIXED: Simplified and standardized Docker Compose template
+# UPDATED: Using host network mode and hostnames
 
 version: '3.8'
 
@@ -8,22 +8,26 @@ services:
   {{ node.name }}:
     image: {{ elasticsearch_docker_image }}:{{ es_version }}
     container_name: {{ node.name }}
-    hostname: {{ node.name }}
+    hostname: {{ node.name }}.{{ top_level_domain }}
     restart: unless-stopped
+    
+    # UPDATED: Use host network mode
+    network_mode: host
     
     environment:
       # Node identification
       - "node.name={{ node.name }}"
       - "cluster.name={{ es_cluster_name }}"
       
-      # Network configuration
-      - "network.host=0.0.0.0"
-      - "http.port=9200"
-      - "transport.port=9300"
+      # Network configuration - UPDATED: bind to specific hostname
+      - "network.host={{ hostvars[inventory_hostname].node_hostname }}"
+      - "network.publish_host={{ hostvars[inventory_hostname].node_hostname }}"
+      - "http.port={{ (es_http_base_port | int) + (node.port_offset | int) }}"
+      - "transport.port={{ (es_transport_base_port | int) + (node.port_offset | int) }}"
       
-      # Discovery configuration
+      # Discovery configuration - UPDATED: using hostnames
       - "discovery.seed_hosts={{ elasticsearch_seed_hosts }}"
-      - "cluster.initial_master_nodes={{ elasticsearch_master_nodes }}"
+      - "cluster.initial_master_nodes={{ elasticsearch_master_node_names | join(',') }}"
       
       # Node roles
       - "node.roles=[{% for role in node.roles %}'{{ role }}'{% if not loop.last %},{% endif %}{% endfor %}]"
@@ -49,14 +53,11 @@ services:
       - "xpack.security.transport.ssl.key=/usr/share/elasticsearch/config/certs/{{ node.name }}/{{ node.name }}.key"
       - "xpack.security.transport.ssl.certificate=/usr/share/elasticsearch/config/certs/{{ node.name }}/{{ node.name }}.crt"
       - "xpack.security.transport.ssl.certificate_authorities=/usr/share/elasticsearch/config/certs/ca/ca.crt"
+      - "xpack.security.transport.ssl.verification_mode=certificate"
 {% endif %}
 {% if es_api_basic_auth_password is defined %}
       - "ELASTIC_PASSWORD={{ es_api_basic_auth_password }}"
 {% endif %}
-
-    ports:
-      - "{{ ansible_default_ipv4.address }}:{{ (es_http_base_port | int) + (node.port_offset | int) }}:9200"
-      - "{{ ansible_default_ipv4.address }}:{{ (es_transport_base_port | int) + (node.port_offset | int) }}:9300"
 
     volumes:
       # Data and logs
@@ -70,9 +71,6 @@ services:
       # Certificates
       - "{{ certs_base_path }}:/usr/share/elasticsearch/config/certs:ro,Z"
 
-    networks:
-      - elastic
-
     ulimits:
       memlock:
         soft: -1
@@ -85,9 +83,9 @@ services:
       test: 
         - "CMD-SHELL"
 {% if es_enable_http_ssl and es_api_basic_auth_password is defined %}
-        - "curl -f -k -u {{ es_api_basic_auth_username }}:{{ es_api_basic_auth_password }} https://localhost:9200/_cluster/health?timeout=30s || exit 1"
+        - "curl -f -k -u {{ es_api_basic_auth_username }}:{{ es_api_basic_auth_password }} https://{{ hostvars[inventory_hostname].node_hostname }}:{{ (es_http_base_port | int) + (node.port_offset | int) }}/_cluster/health?timeout=30s || exit 1"
 {% else %}
-        - "curl -f http://localhost:9200/_cluster/health?timeout=30s || exit 1"
+        - "curl -f http://{{ hostvars[inventory_hostname].node_hostname }}:{{ (es_http_base_port | int) + (node.port_offset | int) }}/_cluster/health?timeout=30s || exit 1"
 {% endif %}
       interval: 30s
       timeout: 30s
@@ -106,10 +104,4 @@ services:
 
 {% endfor %}
 
-networks:
-  elastic:
-    driver: bridge
-    ipam:
-      config:
-        - subnet: "{{ docker_network_subnet }}"
-          gateway: "{{ docker_network_gateway | default('192.168.180.1') }}"
+# NOTE: networks section removed as we're using host network mode

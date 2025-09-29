@@ -1,6 +1,7 @@
 ---
 # roles/install_elastic/tasks/system-config.yml
 # System configuration for Elasticsearch
+# UPDATED: Removed Docker network creation (using host network)
 
 - name: Create Elasticsearch directories
   file:
@@ -16,60 +17,6 @@
 - name: Detect OS family
   set_fact:
     os_family: "{{ ansible_os_family | lower }}"
-
-- name: Install Docker on RedHat/CentOS
-  block:
-    - name: Install Docker packages
-      yum:
-        name:
-          - docker
-          - docker-compose
-        state: present
-    - name: Install pip for Python Docker module
-      yum:
-        name: python3-pip
-        state: present
-    - name: Install Python Docker module
-      pip:
-        name: docker
-  when: os_family in ['redhat', 'centos']
-
-- name: Install Docker on Debian/Ubuntu
-  block:
-    - name: Update apt cache
-      apt:
-        update_cache: yes
-    - name: Install Docker packages
-      apt:
-        name:
-          - docker
-          - docker-compose
-        state: present
-      ignore_errors: true
-    - name: Install Docker alternative packages if first attempt fails
-      apt:
-        name:
-          - docker.io
-          - docker-compose
-          - python3-docker
-        state: present
-      when: ansible_failed_result is defined
-  when: os_family == 'debian'
-
-- name: Install Docker using script if packages not available
-  block:
-    - name: Download Docker installation script
-      get_url:
-        url: https://get.docker.com
-        dest: /tmp/get-docker.sh
-        mode: '0755'
-    - name: Install Docker using script
-      shell: /tmp/get-docker.sh
-    - name: Install docker-compose
-      shell: |
-        curl -L "https://github.com/docker/compose/releases/download/1.29.2/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-        chmod +x /usr/local/bin/docker-compose
-  when: docker_install_failed is defined
 
 - name: Start Docker service
   systemd:
@@ -93,9 +40,7 @@
   debug:
     msg: "Docker installed: {{ docker_version.stdout }}"
 
-- name: Create Docker network for Elasticsearch
-  shell: docker network create elastic --driver bridge --subnet=172.20.0.0/16 || echo "Network may already exist"
-  ignore_errors: true
+# NOTE: Removed Docker network creation since we're using host network mode
 
 # System configuration
 - name: Configure kernel parameters for Elasticsearch
@@ -150,7 +95,9 @@
       ✅ System Configuration Complete
       ==============================
       - Docker: {{ docker_version.stdout }}
-      - Network: elastic network created
+      - Network Mode: host (no Docker network needed)
       - Kernel: vm.max_map_count set to 262144
       - Limits: File and memory limits configured
       - Swap: Disabled for optimal performance
+      
+      ⚠️  Important: Ensure /etc/hosts is configured with all cluster hostnames!

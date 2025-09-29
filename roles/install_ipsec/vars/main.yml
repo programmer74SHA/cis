@@ -1,6 +1,0 @@
----
-# vars file for install_ipsec
-
-cert_dest_dir: "/etc/siem/certs"
-CA_dest: "{{ cert_dest_dir }}/SIEM-CA.crt"
-cert_dir: "/etc/elasticsearch/certs"

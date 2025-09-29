@@ -9,6 +9,8 @@ all:
           ansible_user: root
           ansible_ssh_pass: 'password'
           ansible_connection: ssh
+          # ADDED: hostname for container networking
+          node_hostname: host1.apk-siem.local
           elasticsearch_nodes:
             # 1 Master node on host1
             - name: master-host1
@@ -36,6 +38,7 @@ all:
           ansible_user: root
           ansible_ssh_pass: 'password'
           ansible_connection: ssh
+          node_hostname: host2.apk-siem.local
           elasticsearch_nodes:
             # 1 Master node on host2
             - name: master-host2
@@ -63,6 +66,7 @@ all:
           ansible_user: root
           ansible_ssh_pass: 'password'
           ansible_connection: ssh
+          node_hostname: host3.apk-siem.local
           elasticsearch_nodes:
             # 1 Master node on host3
             - name: master-host3
@@ -86,13 +90,13 @@ all:
               heap_size: '2g'
 
         # BDA node (Business Data Analytics - main management node)
-        # FIXED: Proper SSH connection for BDA node
         bda:
           ansible_host: 127.0.0.1
           ansible_user: root
           ansible_ssh_pass: 'password'
           ansible_connection: ssh
           ansible_ssh_common_args: '-o StrictHostKeyChecking=no'
+          node_hostname: bda.apk-siem.local
           # Service configuration for BDA
           install_kibana: true
           install_elasticsearch: true
@@ -109,6 +113,7 @@ all:
           ansible_user: root
           ansible_ssh_pass: 'password'
           ansible_connection: ssh
+          node_hostname: lb1.apk-siem.local
           service_type: 'load_balancer'  # This host won't run Elasticsearch
 
     # Logical groups (populated dynamically and statically)
@@ -189,11 +194,19 @@ all:
     siem_version: 7.8.0
     nba_interface_name: ens090
     
+    # ADDED: Base paths for all components
+    elasticsearch_base_path: /usr/share/siem/elasticsearch
+    certs_base_path: /usr/share/siem/elasticsearch/certs
+    kibana_base_path: /usr/share/siem/kibana
+    
+    # ADDED: Use host network mode
+    use_host_network: true
+    
     # Elasticsearch cluster configuration
     es_cluster_name: 'siem-multi-node-cluster'
     es_version: '8.18.2'
     
-    # Docker network configuration
+    # Docker network configuration (not used with host network, kept for compatibility)
     docker_network_name: 'elastic'
     docker_network_subnet: '172.20.0.0/16'
     
@@ -216,7 +229,7 @@ all:
     kibana_version: '8.18.2'
     kibana_port: 5601
     kibana_host: '0.0.0.0'
-    kibana_elasticsearch_hosts: 'https://127.0.0.1:9200'
+    kibana_elasticsearch_hosts: 'https://bda.apk-siem.local:9200'
     kibana_elasticsearch_username: 'elastic'
     kibana_elasticsearch_password: 'YourVerySecureElasticsearchPassword123!'
     
@@ -228,55 +241,3 @@ all:
     net_core_rmem_default: 67108864
     disable_ipv6: 1
     bash_history_size: 10000
-
-# =============================================================================================
-# FIXED CONFIGURATION SUMMARY
-# =============================================================================================
-# 
-# 🏠 Physical Hosts: 4 (host1, host2, host3, bda) + 1 LB (lb1)
-# 📊 Total Elasticsearch Nodes: 10
-# 🖥️ Kibana: Installed on BDA node (127.0.0.1:5601)
-# 
-# 📍 Node Distribution:
-# - host1 (192.168.166.130): 3 nodes
-#   * 1 Master (port 9200)
-#   * 1 Hot data (port 9201)
-#   * 1 ML (port 9202)
-# 
-# - host2 (192.168.166.131): 3 nodes  
-#   * 1 Master (port 9200)
-#   * 1 Warm data (port 9201)
-#   * 1 SF/Ingest (port 9202)
-# 
-# - host3 (192.168.166.132): 3 nodes
-#   * 1 Master (port 9200) 
-#   * 1 Hot data (port 9201)
-#   * 1 Cold data (port 9202)
-# 
-# - bda (127.0.0.1): 1 node + Kibana
-#   * 1 BDA master with ML/Transform/Ingest/Data (port 9200)
-#   * Kibana management interface (port 5601)
-# 
-# 🎯 Role Summary:
-# - Master-eligible: 4 nodes (1 per host + BDA)
-# - Hot data: 2 nodes (host1, host3)
-# - Warm data: 1 node (host2)
-# - Cold data: 1 node (host3)
-# - ML: 2 nodes (host1 + bda)
-# - SF/Ingest: 2 nodes (host2 + bda) ← Satisfies LB requirement
-# - BDA: 1 node (localhost) ← Also runs Kibana
-# 
-# 🔗 Access Points:
-# ================
-# - Kibana Management: http://127.0.0.1:5601 (on BDA node)
-# - Load Balancer: http://192.168.166.134 (routes to SF nodes)
-# - BDA/Main: https://127.0.0.1:9200
-# - Master nodes: https://host1:9200, https://host2:9200, https://host3:9200
-# 
-# ✅ FIXES APPLIED:
-# =================
-# ✓ BDA connection changed from 'local' to 'ssh' with 127.0.0.1
-# ✓ Added explicit Kibana configuration for BDA node
-# ✓ Fixed template syntax errors in Elasticsearch configuration
-# ✓ Fixed Docker Compose YAML structure
-# ✓ Added proper health checks and resource limits
