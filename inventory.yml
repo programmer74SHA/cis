@@ -11,6 +11,8 @@ all:
           ansible_connection: ssh
           # ADDED: hostname for container networking
           node_hostname: host1.apk-siem.local
+          docker_network_name: 'elastic'
+          docker_network_subnet: '172.25.0.0/16'
           elasticsearch_nodes:
             # 1 Master node on host1
             - name: master-host1
@@ -39,6 +41,8 @@ all:
           ansible_ssh_pass: 'password'
           ansible_connection: ssh
           node_hostname: host2.apk-siem.local
+          docker_network_name: 'elastic'
+          docker_network_subnet: '172.26.0.0/16'
           elasticsearch_nodes:
             # 1 Master node on host2
             - name: master-host2
@@ -67,6 +71,8 @@ all:
           ansible_ssh_pass: 'password'
           ansible_connection: ssh
           node_hostname: host3.apk-siem.local
+          docker_network_name: 'elastic'
+          docker_network_subnet: '172.27.0.0/16'
           elasticsearch_nodes:
             # 1 Master node on host3
             - name: master-host3
@@ -114,7 +120,7 @@ all:
           ansible_ssh_pass: 'password'
           ansible_connection: ssh
           node_hostname: lb1.apk-siem.local
-          service_type: 'load_balancer'  # This host won't run Elasticsearch
+          service_type: 'load_balancer'
 
     # Logical groups (populated dynamically and statically)
     BDA:
@@ -205,10 +211,6 @@ all:
     # Elasticsearch cluster configuration
     es_cluster_name: 'siem-multi-node-cluster'
     es_version: '8.18.2'
-    
-    # Docker network configuration (not used with host network, kept for compatibility)
-    docker_network_name: 'elastic'
-    docker_network_subnet: '172.20.0.0/16'
     
     # Port configuration - IMPORTANT: These are base ports, actual ports = base + offset
     es_http_base_port: 9200
