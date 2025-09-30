@@ -1,0 +1,72 @@
+---
+- name: Determine Elasticsearch endpoint for BDA host
+  set_fact:
+    es_endpoint_host: "{{ hostvars[inventory_hostname].node_hostname }}"
+    es_endpoint_port: "{{ es_http_base_port }}"
+    es_protocol: "{{ 'https' if es_enable_http_ssl else 'http' }}"
+
+- name: Display Elasticsearch endpoint being used
+  debug:
+    msg: |
+      🔗 Elasticsearch Endpoint Configuration
+      ======================================
+      Protocol: {{ es_protocol }}
+      Host: {{ es_endpoint_host }}
+      Port: {{ es_endpoint_port }}
+      Full URL: {{ es_protocol }}://{{ es_endpoint_host }}:{{ es_endpoint_port }}
+
+- name: Wait for Elasticsearch to be ready for user setup
+  uri:
+    url: "{{ es_protocol }}://{{ es_endpoint_host }}:{{ es_endpoint_port }}/"
+    method: GET
+    user: "{{ es_api_basic_auth_username }}"
+    password: "{{ es_api_basic_auth_password }}"
+    force_basic_auth: yes
+    validate_certs: no
+    status_code: [200]
+    timeout: 30
+  register: es_ready
+  until: es_ready.status == 200
+  retries: 30
+  delay: 10
+  when: es_api_basic_auth_password is defined
+
+- name: Check if kibana_system password is already set
+  uri:
+    url: "{{ es_protocol }}://{{ es_endpoint_host }}:{{ es_endpoint_port }}/_security/user/kibana_system"
+    method: GET
+    user: "{{ es_api_basic_auth_username }}"
+    password: "{{ es_api_basic_auth_password }}"
+    force_basic_auth: yes
+    validate_certs: no
+    status_code: [200, 404]
+    timeout: 30
+  register: kibana_user_check
+  ignore_errors: true
+
+- name: Set kibana_system user password
+  uri:
+    url: "{{ es_protocol }}://{{ es_endpoint_host }}:{{ es_endpoint_port }}/_security/user/kibana_system/_password"
+    method: POST
+    user: "{{ es_api_basic_auth_username }}"
+    password: "{{ es_api_basic_auth_password }}"
+    force_basic_auth: yes
+    validate_certs: no
+    body_format: json
+    body:
+      password: "{{ kibana_elasticsearch_password }}"
+    status_code: [200]
+    timeout: 30
+  register: kibana_password_set
+  when: es_api_basic_auth_password is defined
+
+- name: Display kibana_system password setup result
+  debug:
+    msg: |
+      ✅ Kibana System User Configuration
+      ==================================
+      Elasticsearch Endpoint: {{ es_protocol }}://{{ es_endpoint_host }}:{{ es_endpoint_port }}
+      Username: kibana_system
+      Password: [CONFIGURED]
+      Status: {{ 'Password set successfully' if kibana_password_set.status == 200 else 'Check required' }}
+  when: kibana_password_set is defined

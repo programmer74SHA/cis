@@ -15,6 +15,14 @@ services:
     networks:
       - {{ docker_network_name }}
     
+
+    # ADD THIS SECTION - Map all cluster hostnames to their IPs
+    extra_hosts:
+{% for host in groups['ELASTICSEARCH'] %}
+      - "{{ hostvars[host].node_hostname }}:{{ hostvars[host].ansible_host }}"
+{% endfor %}
+
+
     # Expose ports on host interface
     ports:
       - "{{ hostvars[inventory_hostname].ansible_host }}:{{ (es_http_base_port | int) + (node.port_offset | int) }}:{{ (es_http_base_port | int) + (node.port_offset | int) }}"
@@ -59,7 +67,7 @@ services:
       - "xpack.security.transport.ssl.key=/usr/share/elasticsearch/config/certs/{{ node.name }}/{{ node.name }}.key"
       - "xpack.security.transport.ssl.certificate=/usr/share/elasticsearch/config/certs/{{ node.name }}/{{ node.name }}.crt"
       - "xpack.security.transport.ssl.certificate_authorities=/usr/share/elasticsearch/config/certs/ca/ca.crt"
-      - "xpack.security.transport.ssl.verification_mode=certificate"
+      - "xpack.security.transport.ssl.verification_mode=none"
 {% endif %}
 {% if es_api_basic_auth_password is defined %}
       - "ELASTIC_PASSWORD={{ es_api_basic_auth_password }}"

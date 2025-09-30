@@ -54,8 +54,8 @@
           server.port: 5601
           server.name: "{{ inventory_hostname }}-kibana"
           elasticsearch.hosts: ["http://127.0.0.1:9200"]
-          elasticsearch.username: "elastic"
-          elasticsearch.password: "{{ es_api_basic_auth_password }}"
+          elasticsearch.username: "kibana_system"
+          elasticsearch.password: "{{ kibana_elasticsearch_password }}"
           logging.root.level: info
           telemetry.optIn: false
           pid.file: /usr/share/kibana/data/kibana.pid
