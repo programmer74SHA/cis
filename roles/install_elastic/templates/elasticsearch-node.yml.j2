@@ -1,7 +1,6 @@
 # roles/install_elastic/templates/elasticsearch-node.yml.j2
-# Elasticsearch configuration for {{ node.name }}
+# Production-ready Elasticsearch configuration template
 # Generated: {{ ansible_date_time.iso8601 }}
-# UPDATED: Using hostnames instead of IPs
 
 # ======================== Elasticsearch Configuration =========================
 
@@ -22,21 +21,21 @@ path.logs: /usr/share/elasticsearch/logs
 # Memory
 bootstrap.memory_lock: true
 
-# Network - UPDATED: Using hostname instead of 0.0.0.0
-network.host: {{ hostvars[inventory_hostname].node_hostname }}
+# Network
+network.host: 0.0.0.0
 network.publish_host: {{ hostvars[inventory_hostname].node_hostname }}
 http.port: {{ (es_http_base_port | int) + (node.port_offset | int) }}
 transport.port: {{ (es_transport_base_port | int) + (node.port_offset | int) }}
 
-# Discovery - UPDATED: Using hostnames with ports
-discovery.seed_hosts: 
-{% for host in elasticsearch_seed_hosts_list %}
-  - "{{ host }}"
+# Discovery - FIXED: Use proper YAML list format
+discovery.seed_hosts:
+{% for seed_host in elasticsearch_seed_hosts_list %}
+  - "{{ seed_host }}"
 {% endfor %}
 
 cluster.initial_master_nodes:
-{% for node_name in elasticsearch_master_node_names %}
-  - "{{ node_name }}"
+{% for master_node in elasticsearch_master_node_names %}
+  - "{{ master_node }}"
 {% endfor %}
 
 # Performance
@@ -76,3 +75,15 @@ xpack.ml.enabled: false
 
 # License
 xpack.license.self_generated.type: basic
+
+# Logging (production settings)
+logger.org.elasticsearch.deprecation: warn
+logger.org.elasticsearch.transport: info
+logger.org.elasticsearch.discovery: info
+
+# Thread pool settings for production
+thread_pool:
+  write:
+    queue_size: 1000
+  search:
+    queue_size: 1000

@@ -1,6 +1,6 @@
 ---
 # roles/install_elastic/tasks/elasticsearch-docker-deploy.yml
-# UPDATED: Using custom Docker bridge network per host
+# IMPROVED: Better error handling and validation
 
 - name: Display Docker deployment banner
   debug:
@@ -11,77 +11,279 @@
       Network: {{ docker_network_name }} ({{ docker_network_subnet }})
       Nodes: {{ elasticsearch_nodes | length }}
 
-- name: Verify Docker network exists
-  shell: docker network ls --format "{{ '{{' }}.Name{{ '}}' }}" | grep -x "{{ docker_network_name }}"
-  register: network_exists
-  changed_when: false
-  failed_when: network_exists.rc != 0
+- name: Pre-deployment validation
+  block:
+    - name: Verify Docker network exists
+      shell: docker network ls --format "{{ '{{' }}.Name{{ '}}' }}" | grep -x "{{ docker_network_name }}"
+      register: network_exists
+      changed_when: false
+      failed_when: network_exists.rc != 0
 
-- name: Check if Docker Compose file exists
-  stat:
-    path: "{{ elasticsearch_compose_path }}"
-  register: compose_file_exists
+    - name: Check if Docker Compose file exists and is valid
+      stat:
+        path: "{{ elasticsearch_compose_path }}"
+      register: compose_file_exists
 
-- name: Fail if Docker Compose file is missing
-  fail:
-    msg: "Docker Compose file not found at {{ elasticsearch_compose_path }}"
-  when: not compose_file_exists.stat.exists
+    - name: Fail if Docker Compose file is missing
+      fail:
+        msg: "Docker Compose file not found at {{ elasticsearch_compose_path }}"
+      when: not compose_file_exists.stat.exists
 
-- name: Stop existing Elasticsearch containers
-  shell: |
-    cd {{ elasticsearch_docker_path }}
-    docker-compose down
-  ignore_errors: true
+    - name: Validate Docker Compose syntax
+      shell: cd {{ elasticsearch_docker_path }} && docker-compose config > /dev/null
+      register: compose_syntax_check
+      changed_when: false
 
-- name: Deploy Elasticsearch using Docker Compose
-  shell: |
-    cd {{ elasticsearch_docker_path }}
-    docker-compose up -d
-  register: elasticsearch_deployment
-  retries: 3
-  delay: 10
+    - name: Pre-deployment configuration file verification
+      stat:
+        path: "{{ elasticsearch_docker_path }}/{{ node.name }}/config/{{ config_file }}"
+      register: pre_deploy_file_check
+      loop: "{{ elasticsearch_nodes | product(['elasticsearch.yml', 'jvm.options']) | list }}"
+      vars:
+        node: "{{ item[0] }}"
+        config_file: "{{ item[1] }}"
+      loop_control:
+        label: "{{ node.name }}/{{ config_file }}"
 
-- name: Wait for containers to be running
-  shell: |
-    cd {{ elasticsearch_docker_path }}
-    docker-compose ps --services --filter "status=running" | wc -l
-  register: running_containers
-  until: running_containers.stdout | int == (elasticsearch_nodes | length)
-  retries: 30
-  delay: 10
-  changed_when: false
+    - name: Display pre-deployment file status
+      debug:
+        msg: |
+          📁 Pre-deployment File Verification:
+          ===================================
+          {% for result in pre_deploy_file_check.results %}
+          {% set node_name = result.item[0].name %}
+          {% set file_name = result.item[1] %}
+          - {{ node_name }}/{{ file_name }}: {{ 'OK' if result.stat.exists and result.stat.isreg else 'MISSING/INVALID' }}
+          {% endfor %}
 
-- name: Wait additional time for Elasticsearch to fully start
-  wait_for:
-    timeout: 60
+    - name: Fail if any required files are missing
+      fail:
+        msg: |
+          ❌ Required configuration file missing: {{ item.item[0].name }}/{{ item.item[1] }}
+          Path: {{ item.invocation.module_args.path }}
+          Cannot proceed with Docker deployment.
+      loop: "{{ pre_deploy_file_check.results }}"
+      when: not item.stat.exists or not item.stat.isreg
 
-- name: Display container deployment status
-  debug:
-    msg: |
-      🐳 Elasticsearch Docker Deployment Status
-      =======================================
-      
-      Host: {{ inventory_hostname }}
-      Network: {{ docker_network_name }} ({{ docker_network_subnet }})
-      Expected containers: {{ elasticsearch_nodes | length }}
-      Running containers: {{ running_containers.stdout | default('Unknown') }}
-      
-      📋 Deployed Nodes:
-      {% for node in elasticsearch_nodes %}
-      - {{ node.name }}: {{ 'https' if es_enable_http_ssl else 'http' }}://{{ hostvars[inventory_hostname].node_hostname }}:{{ es_http_base_port + node.port_offset }}
-      {% endfor %}
-      
-      🔧 Management Commands:
-      # View all containers
-      cd {{ elasticsearch_docker_path }} && docker-compose ps
-      
-      # View logs
-      cd {{ elasticsearch_docker_path }} && docker-compose logs [node-name]
-      
-      # Check network
-      docker network inspect {{ docker_network_name }}
-      
-      # Restart services
-      cd {{ elasticsearch_docker_path }} && docker-compose restart
-      
-      ✅ Docker deployment completed!
+- name: Stop existing containers gracefully
+  block:
+    - name: Stop existing Elasticsearch containers
+      shell: |
+        cd {{ elasticsearch_docker_path }}
+        if [ -f docker-compose.yml ]; then
+          docker-compose down --timeout 30
+        else
+          echo "No docker-compose.yml found, skipping container stop"
+        fi
+      register: container_stop_result
+      ignore_errors: true
+
+    - name: Display container stop result
+      debug:
+        msg: |
+          🛑 Container Stop Result:
+          {{ container_stop_result.stdout }}
+          {% if container_stop_result.stderr %}
+          Errors: {{ container_stop_result.stderr }}
+          {% endif %}
+
+    - name: Remove any orphaned containers
+      shell: |
+        # Remove containers that match our node names
+        for node in {{ elasticsearch_nodes | map(attribute='name') | join(' ') }}; do
+          if docker ps -a --format "{{ '{{' }}.Names{{ '}}' }}" | grep -q "^${node}$"; then
+            echo "Removing orphaned container: $node"
+            docker rm -f "$node" || true
+          fi
+        done
+      register: orphan_cleanup
+      changed_when: "'Removing orphaned container' in orphan_cleanup.stdout"
+
+- name: Deploy Elasticsearch containers
+  block:
+    - name: Start Elasticsearch containers using Docker Compose
+      shell: |
+        cd {{ elasticsearch_docker_path }}
+        docker-compose up -d --force-recreate
+      register: elasticsearch_deployment
+      retries: 3
+      delay: 10
+
+    - name: Display deployment output
+      debug:
+        msg: |
+          🚀 Deployment Output:
+          {{ elasticsearch_deployment.stdout }}
+          {% if elasticsearch_deployment.stderr %}
+          Warnings/Errors: {{ elasticsearch_deployment.stderr }}
+          {% endif %}
+
+- name: Verify container deployment
+  block:
+    - name: Wait for containers to be created
+      pause:
+        seconds: 10
+
+    - name: Check container status
+      shell: |
+        cd {{ elasticsearch_docker_path }}
+        docker-compose ps --services --filter "status=running" | wc -l
+      register: running_containers
+      until: running_containers.stdout | int == (elasticsearch_nodes | length)
+      retries: 15
+      delay: 20
+      changed_when: false
+
+    - name: Get detailed container status
+      shell: |
+        cd {{ elasticsearch_docker_path }}
+        echo "=== Container Status ==="
+        docker-compose ps
+        echo ""
+        echo "=== All Containers ==="
+        docker ps --filter "name={{ elasticsearch_nodes | map(attribute='name') | join('|') }}" --format "table {{ '{{' }}.Names{{ '}}' }}\t{{ '{{' }}.Status{{ '}}' }}\t{{ '{{' }}.Ports{{ '}}' }}"
+      register: detailed_container_status
+      changed_when: false
+
+    - name: Display detailed container status
+      debug:
+        msg: "{{ detailed_container_status.stdout_lines }}"
+
+    - name: Check for container startup errors
+      shell: |
+        echo "=== Container Health Check ==="
+        for node in {{ elasticsearch_nodes | map(attribute='name') | join(' ') }}; do
+          echo "--- $node ---"
+          if docker ps --format "{{ '{{' }}.Names{{ '}}' }}" | grep -q "^${node}$"; then
+            echo "Status: Running"
+            # Get last 10 lines of logs to check for obvious errors
+            echo "Recent logs:"
+            docker logs --tail 10 "$node" 2>&1 | head -10
+          else
+            echo "Status: Not running"
+            echo "Logs:"
+            docker logs "$node" 2>&1 | tail -20 || echo "No logs available"
+          fi
+          echo ""
+        done
+      register: container_health_check
+      changed_when: false
+
+    - name: Display container health check
+      debug:
+        msg: "{{ container_health_check.stdout_lines }}"
+
+- name: Final deployment verification
+  block:
+    - name: Wait additional time for Elasticsearch to fully start
+      pause:
+        seconds: 60
+
+    - name: Verify all containers are running and healthy
+      shell: |
+        failed_containers=""
+        for node in {{ elasticsearch_nodes | map(attribute='name') | join(' ') }}; do
+          if ! docker ps --format "{{ '{{' }}.Names{{ '}}' }}" | grep -q "^${node}$"; then
+            failed_containers="$failed_containers $node"
+          fi
+        done
+        
+        if [ -n "$failed_containers" ]; then
+          echo "Failed containers:$failed_containers"
+          exit 1
+        else
+          echo "All containers running successfully"
+          exit 0
+        fi
+      register: final_container_check
+      failed_when: final_container_check.rc != 0
+
+    - name: Display final deployment status
+      debug:
+        msg: |
+          🎉 Elasticsearch Docker Deployment Status
+          =======================================
+          
+          Host: {{ inventory_hostname }}
+          Network: {{ docker_network_name }} ({{ docker_network_subnet }})
+          Expected containers: {{ elasticsearch_nodes | length }}
+          Running containers: {{ running_containers.stdout | default('Unknown') }}
+          
+          📋 Deployed Nodes:
+          {% for node in elasticsearch_nodes %}
+          - {{ node.name }}: {{ 'https' if es_enable_http_ssl else 'http' }}://{{ hostvars[inventory_hostname].node_hostname }}:{{ es_http_base_port + node.port_offset }}
+          {% endfor %}
+          
+          🔧 Management Commands:
+          # View all containers
+          cd {{ elasticsearch_docker_path }} && docker-compose ps
+          
+          # View logs for specific node
+          docker logs [node-name]
+          
+          # Follow logs for all nodes
+          cd {{ elasticsearch_docker_path }} && docker-compose logs -f
+          
+          # Check network
+          docker network inspect {{ docker_network_name }}
+          
+          # Restart all services
+          cd {{ elasticsearch_docker_path }} && docker-compose restart
+          
+          # Stop all services
+          cd {{ elasticsearch_docker_path }} && docker-compose down
+          
+          ✅ Docker deployment completed successfully!
+
+  rescue:
+    - name: Handle deployment failure
+      debug:
+        msg: |
+          ❌ Docker deployment failed!
+          
+          🔍 Troubleshooting Steps:
+          1. Check Docker service:
+             systemctl status docker
+          
+          2. Check container logs:
+             docker logs [container-name]
+          
+          3. Check configuration files:
+             ls -la {{ elasticsearch_docker_path }}/*/config/
+          
+          4. Check docker-compose syntax:
+             cd {{ elasticsearch_docker_path }} && docker-compose config
+          
+          5. Check disk space:
+             df -h {{ elasticsearch_docker_path }}
+          
+          6. Check permissions:
+             ls -la {{ elasticsearch_docker_path }}
+          
+          7. Manual container start (for debugging):
+             cd {{ elasticsearch_docker_path }}
+             docker-compose up --no-start
+             docker-compose start [service-name]
+          
+          8. Clean up and retry:
+             cd {{ elasticsearch_docker_path }}
+             docker-compose down
+             docker system prune -f
+             docker-compose up -d
+          
+          📋 Common Issues and Solutions:
+          - Config files missing: Re-run Ansible with --tags "elasticsearch"
+          - Permission denied: sudo chown -R 1000:1000 {{ elasticsearch_docker_path }}
+          - Port conflicts: Check if ports are already in use with 'ss -tlnp'
+          - Memory issues: Check available memory with 'free -h'
+          - Docker daemon issues: sudo systemctl restart docker
+          
+          💡 Quick Recovery Commands:
+          # Reset everything and start fresh
+          cd {{ elasticsearch_docker_path }}
+          docker-compose down -v
+          sudo chown -R 1000:1000 {{ elasticsearch_docker_path }}
+          docker-compose up -d
+          
+          # Check individual container health
+          docker inspect [container-name] | jq '.[0].State'

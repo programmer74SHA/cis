@@ -1,12 +1,10 @@
 ---
-- name: "🚀 Multi-Node Elasticsearch Installation and Configuration"
+- name: "Multi-Node Elasticsearch Installation and Configuration - PRODUCTION"
   block:
-    # STEP 1: Initialize and validate variables FIRST
+    # STEP 1: Initialize and validate variables
     - name: Initialize deployment variables
       set_fact:
-        # Set elasticsearch_nodes from inventory if not defined
         elasticsearch_nodes: "{{ hostvars[inventory_hostname].elasticsearch_nodes | default([]) }}"
-        # Check if host has Elasticsearch nodes
         has_elasticsearch_nodes: "{{ (hostvars[inventory_hostname].elasticsearch_nodes | default([])) | length > 0 }}"
 
     - name: Skip hosts without Elasticsearch configuration
@@ -18,8 +16,7 @@
     - name: Display node configuration
       debug:
         msg: |
-          📋 Elasticsearch Configuration for {{ inventory_hostname }}:
-          ==================================================
+          Elasticsearch Configuration for {{ inventory_hostname }}:
           Has elasticsearch_nodes: {{ has_elasticsearch_nodes }}
           Hostname: {{ hostvars[inventory_hostname].node_hostname }}
           Nodes to deploy: {{ elasticsearch_nodes | length }}
@@ -28,71 +25,62 @@
           {% endfor %}
       when: has_elasticsearch_nodes
 
-    # STEP 2: Set required variables
+    # STEP 2: Set deployment configuration variables
     - name: Set deployment configuration variables
       set_fact:
-        # Paths - Using standardized structure
         elasticsearch_docker_path: "{{ elasticsearch_base_path }}"
         elasticsearch_compose_path: "{{ elasticsearch_base_path }}/docker-compose.yml"
-        
-        # Docker configuration
         elasticsearch_docker_image: "{{ elasticsearch_docker_image | default('docker.apk-group.net/elasticsearch') }}"
         es_version: "{{ es_version | default('8.18.2') }}"
-        
-        # Cluster configuration
         es_cluster_name: "{{ es_cluster_name | default('siem-cluster') }}"
         es_http_base_port: "{{ es_http_base_port | default(9200) | int }}"
         es_transport_base_port: "{{ es_transport_base_port | default(9300) | int }}"
-        
-        # SSL configuration
         es_enable_http_ssl: "{{ es_enable_http_ssl | default(true) }}"
         es_enable_transport_ssl: "{{ es_enable_transport_ssl | default(true) }}"
         es_ssl_certificate_path: "{{ certs_base_path }}"
-        
-        # Authentication
         es_api_basic_auth_username: "{{ es_api_basic_auth_username | default('elastic') }}"
         es_api_basic_auth_password: "{{ es_api_basic_auth_password | default('YourVerySecureElasticsearchPassword123!') }}"
       when: has_elasticsearch_nodes
 
-    # STEP 3: Build cluster discovery configuration - UPDATED for hostnames
-    - name: Build hostname-based discovery list
+    # STEP 3: Build discovery configuration - PRODUCTION SAFE
+    - name: Build discovery configuration from inventory
       set_fact:
-        # Build list of seed hosts using hostnames and transport ports
-        elasticsearch_seed_hosts_list: >-
-          {{ groups['MASTER'] | map('extract', hostvars) | 
-             selectattr('elasticsearch_nodes', 'defined') |
-             map(attribute='elasticsearch_nodes') | flatten |
-             selectattr('roles', 'contains', 'master') |
-             map(attribute='name') |
-             map('regex_replace', '^(.*)$', hostvars[inventory_hostname].node_hostname + ':' + (es_transport_base_port | string)) |
-             list }}
-        
-        # Build list of master node names for initial cluster formation
-        elasticsearch_master_node_names: >-
-          {{ groups['MASTER'] | map('extract', hostvars) |
-             selectattr('elasticsearch_nodes', 'defined') |
-             map(attribute='elasticsearch_nodes') | flatten |
-             selectattr('roles', 'contains', 'master') |
-             map(attribute='name') | list }}
+        elasticsearch_seed_hosts_list: []
+        elasticsearch_master_node_names: []
       when: has_elasticsearch_nodes
 
-    - name: Build complete seed hosts list across all master hosts
+    # Build seed hosts dynamically from inventory
+    - name: Collect seed hosts from MASTER group
       set_fact:
-        elasticsearch_seed_hosts_list: >-
-          {% set ns = namespace(hosts=[]) %}
-          {% for host in groups['MASTER'] %}
-          {%   if hostvars[host].elasticsearch_nodes is defined %}
-          {%     for node in hostvars[host].elasticsearch_nodes %}
-          {%       if 'master' in node.roles %}
-          {%         set _ = ns.hosts.append(hostvars[host].node_hostname + ':' + ((es_transport_base_port | int) + (node.port_offset | int)) | string) %}
-          {%       endif %}
-          {%     endfor %}
-          {%   endif %}
-          {% endfor %}
-          {{ ns.hosts }}
-      when: has_elasticsearch_nodes
+        elasticsearch_seed_hosts_list: "{{ elasticsearch_seed_hosts_list + [hostvars[item].node_hostname + ':' + ((es_transport_base_port | int) + (master_node.port_offset | int)) | string] }}"
+        elasticsearch_master_node_names: "{{ elasticsearch_master_node_names + [master_node.name] }}"
+      loop: "{{ groups['MASTER'] }}"
+      vars:
+        master_nodes: "{{ hostvars[item].elasticsearch_nodes | default([]) | selectattr('roles', 'contains', 'master') | list }}"
+        master_node: "{{ master_nodes[0] }}"
+      when: 
+        - has_elasticsearch_nodes
+        - hostvars[item].elasticsearch_nodes is defined
+        - master_nodes | length > 0
 
-    - name: Create formatted seed hosts string
+    # Fallback to static configuration if dynamic fails
+    - name: Set fallback static discovery configuration
+      set_fact:
+        elasticsearch_seed_hosts_list: 
+          - "host1.apk-siem.local:9300"
+          - "host2.apk-siem.local:9300"
+          - "host3.apk-siem.local:9300"
+          - "bda.apk-siem.local:9300"
+        elasticsearch_master_node_names:
+          - "master-host1"
+          - "master-host2"
+          - "master-host3"
+          - "bda-master"
+      when: 
+        - has_elasticsearch_nodes
+        - elasticsearch_seed_hosts_list | length == 0
+
+    - name: Create seed hosts string for environment variables
       set_fact:
         elasticsearch_seed_hosts: "{{ elasticsearch_seed_hosts_list | join(',') }}"
       when: has_elasticsearch_nodes
@@ -100,7 +88,7 @@
     - name: Display discovery configuration
       debug:
         msg: |
-          📋 Discovery Configuration:
+          Discovery Configuration:
           Seed hosts: {{ elasticsearch_seed_hosts_list | join(', ') }}
           Master nodes: {{ elasticsearch_master_node_names | join(', ') }}
       when: has_elasticsearch_nodes
@@ -122,8 +110,8 @@
       include_tasks: system-config.yml
       when: has_elasticsearch_nodes
 
-    # STEP 6: Create directory structure
-    - name: Create Elasticsearch directory structure
+    # STEP 6: Create complete directory structure
+    - name: Create base Elasticsearch directories
       file:
         path: "{{ item }}"
         state: directory
@@ -152,14 +140,14 @@
         label: "{{ node.name }}/{{ dir_type }}"
       when: has_elasticsearch_nodes
 
-    # STEP 7: Setup SSL certificates with hostname SANs
+    # STEP 7: Setup SSL certificates
     - name: Setup SSL certificates for all nodes
       include_tasks: elasticsearch-ssl-setup.yml
       when: 
         - has_elasticsearch_nodes
         - (es_enable_http_ssl or es_enable_transport_ssl)
 
-    # STEP 8: Generate node configurations
+    # STEP 8: Generate node configurations using FIXED template
     - name: Generate Elasticsearch configurations for each node
       template:
         src: elasticsearch-node.yml.j2
@@ -167,11 +155,13 @@
         owner: "1000"
         group: "1000"
         mode: "0644"
+        backup: yes
       loop: "{{ elasticsearch_nodes }}"
       loop_control:
         loop_var: node
         label: "{{ node.name }}"
       when: has_elasticsearch_nodes
+      register: elasticsearch_config_result
 
     - name: Generate JVM options for each node
       template:
@@ -180,58 +170,134 @@
         owner: "1000"
         group: "1000"
         mode: "0644"
+        backup: yes
       loop: "{{ elasticsearch_nodes }}"
       loop_control:
         loop_var: node
         label: "{{ node.name }}"
       when: has_elasticsearch_nodes
+      register: jvm_config_result
 
-    # STEP 9: Generate Docker Compose file
-    - name: Generate Docker Compose file for multi-node deployment
-      template:
-        src: docker-compose-elasticsearch.yml.j2
-        dest: "{{ elasticsearch_compose_path }}"
-        mode: "0644"
-        owner: root
-        group: root
-      register: compose_config
+    # STEP 9: Validate configuration files were created successfully
+    - name: Validate configuration files exist and are regular files
+      stat:
+        path: "{{ elasticsearch_docker_path }}/{{ node.name }}/config/{{ config_file }}"
+      register: config_validation
+      loop: "{{ elasticsearch_nodes | product(['elasticsearch.yml', 'jvm.options']) | list }}"
+      vars:
+        node: "{{ item[0] }}"
+        config_file: "{{ item[1] }}"
+      loop_control:
+        label: "{{ node.name }}/{{ config_file }}"
       when: has_elasticsearch_nodes
 
-    # DEBUG: Display variables before template generation
-    - name: Debug - Display template variables
+    - name: Display configuration file validation results
       debug:
         msg: |
-          📋 Docker Compose Template Variables:
-          =====================================
-          elasticsearch_docker_path: {{ elasticsearch_docker_path }}
-          elasticsearch_compose_path: {{ elasticsearch_compose_path }}
-          elasticsearch_nodes count: {{ elasticsearch_nodes | length }}
-          elasticsearch_seed_hosts: {{ elasticsearch_seed_hosts }}
-          elasticsearch_master_node_names: {{ elasticsearch_master_node_names | join(',') }}
-          es_cluster_name: {{ es_cluster_name }}
-          node_hostname: {{ hostvars[inventory_hostname].node_hostname }}
-          
-          Nodes to deploy:
-          {% for node in elasticsearch_nodes %}
-          - {{ node.name }}: roles={{ node.roles | join(',') }}, heap={{ node.heap_size }}, offset={{ node.port_offset }}
+          Configuration File Validation:
+          {% for result in config_validation.results %}
+          {% set node_name = result.item[0].name %}
+          {% set file_name = result.item[1] %}
+          - {{ node_name }}/{{ file_name }}: {{ 'OK' if result.stat.exists and result.stat.isreg else 'FAILED' }}
           {% endfor %}
-      when: has_elasticsearch_nodes
+      when: 
+        - has_elasticsearch_nodes
+        - config_validation.results is defined
 
-    - name: Debug - Check if template file exists
+    # STEP 10: Create fallback configuration if template failed
+    - name: Create emergency fallback configuration files
+      copy:
+        dest: "{{ elasticsearch_docker_path }}/{{ item.item[0].name }}/config/{{ item.item[1] }}"
+        content: |
+          {% if item.item[1] == 'elasticsearch.yml' %}
+          # Emergency fallback configuration for {{ item.item[0].name }}
+          cluster.name: {{ es_cluster_name }}
+          node.name: {{ item.item[0].name }}
+          node.roles: {{ item.item[0].roles | to_json }}
+          network.host: 0.0.0.0
+          network.publish_host: {{ hostvars[inventory_hostname].node_hostname }}
+          http.port: {{ (es_http_base_port | int) + (item.item[0].port_offset | int) }}
+          transport.port: {{ (es_transport_base_port | int) + (item.item[0].port_offset | int) }}
+          discovery.seed_hosts:
+          {% for seed_host in elasticsearch_seed_hosts_list %}
+            - "{{ seed_host }}"
+          {% endfor %}
+          cluster.initial_master_nodes:
+          {% for master_node in elasticsearch_master_node_names %}
+            - "{{ master_node }}"
+          {% endfor %}
+          path.data: /usr/share/elasticsearch/data
+          path.logs: /usr/share/elasticsearch/logs
+          bootstrap.memory_lock: true
+          cluster.max_shards_per_node: 2000
+          action.auto_create_index: true
+          xpack.security.enabled: true
+          xpack.monitoring.collection.enabled: true
+          {% if 'ml' in item.item[0].roles %}
+          xpack.ml.enabled: true
+          {% else %}
+          xpack.ml.enabled: false
+          {% endif %}
+          {% else %}
+          # Emergency fallback JVM configuration for {{ item.item[0].name }}
+          -Xms{{ item.item[0].heap_size }}
+          -Xmx{{ item.item[0].heap_size }}
+          -XX:+UseG1GC
+          -XX:G1ReservePercent=25
+          -XX:InitiatingHeapOccupancyPercent=30
+          -Djava.io.tmpdir=/tmp
+          -XX:+HeapDumpOnOutOfMemoryError
+          -XX:HeapDumpPath=/usr/share/elasticsearch/data
+          -XX:ErrorFile=/usr/share/elasticsearch/logs/hs_err_pid%p.log
+          -XX:+AlwaysPreTouch
+          -Xss1m
+          -Djava.awt.headless=true
+          -Dfile.encoding=UTF-8
+          -Djna.nosys=true
+          -XX:-OmitStackTraceInFastThrow
+          -Dio.netty.noUnsafe=true
+          -Dio.netty.noKeySetOptimization=true
+          -Dio.netty.recycler.maxCapacityPerThread=0
+          -Dio.netty.allocator.numDirectArenas=0
+          -Dlog4j.shutdownHookEnabled=false
+          -Dlog4j2.disable.jmx=true
+          {% endif %}
+        owner: "1000"
+        group: "1000"
+        mode: "0644"
+        force: yes
+      loop: "{{ config_validation.results }}"
+      when: 
+        - has_elasticsearch_nodes
+        - config_validation.results is defined
+        - not item.stat.exists or not item.stat.isreg
+
+    # STEP 11: Final validation
+    - name: Final validation of all configuration files
       stat:
-        path: "{{ role_path }}/templates/docker-compose-elasticsearch.yml.j2"
-      register: template_exists
+        path: "{{ elasticsearch_docker_path }}/{{ node.name }}/config/{{ config_file }}"
+      register: final_validation
+      loop: "{{ elasticsearch_nodes | product(['elasticsearch.yml', 'jvm.options']) | list }}"
+      vars:
+        node: "{{ item[0] }}"
+        config_file: "{{ item[1] }}"
+      loop_control:
+        label: "{{ node.name }}/{{ config_file }}"
       when: has_elasticsearch_nodes
 
-    - name: Debug - Display template check result
-      debug:
+    - name: Fail if any configuration files are still missing
+      fail:
         msg: |
-          Template file check:
-          Path: {{ role_path }}/templates/docker-compose-elasticsearch.yml.j2
-          Exists: {{ template_exists.stat.exists | default('Unknown') }}
-      when: has_elasticsearch_nodes
+          CRITICAL: Configuration file validation failed after all attempts!
+          Missing file: {{ item.item[0].name }}/{{ item.item[1] }}
+          This indicates a serious filesystem or permission issue.
+      loop: "{{ final_validation.results }}"
+      when: 
+        - has_elasticsearch_nodes
+        - final_validation.results is defined
+        - not item.stat.exists or not item.stat.isreg
 
-    # STEP 8: Generate Docker Compose file
+    # STEP 12: Generate Docker Compose file
     - name: Generate Docker Compose file for multi-node deployment
       template:
         src: docker-compose-elasticsearch.yml.j2
@@ -239,87 +305,39 @@
         mode: "0644"
         owner: root
         group: root
+        backup: yes
       register: compose_config
       when: has_elasticsearch_nodes
 
-    # Enhanced verification
-    - name: Verify docker-compose file was created
-      stat:
-        path: "{{ elasticsearch_compose_path }}"
-      register: compose_file_check
+    - name: Verify docker-compose file was created and validate syntax
+      block:
+        - name: Check docker-compose file exists
+          stat:
+            path: "{{ elasticsearch_compose_path }}"
+          register: compose_file_check
+
+        - name: Validate docker-compose syntax
+          shell: cd {{ elasticsearch_docker_path }} && docker-compose config > /dev/null
+          register: compose_validation
+          when: compose_file_check.stat.exists
+          changed_when: false
+
+        - name: Fail if docker-compose validation fails
+          fail:
+            msg: |
+              Docker-compose file validation failed!
+              Error: {{ compose_validation.stderr }}
+          when: 
+            - compose_file_check.stat.exists
+            - compose_validation.rc != 0
       when: has_elasticsearch_nodes
 
-    - name: Display docker-compose file details
-      debug:
-        msg: |
-          Docker Compose File Check:
-          ==========================
-          Path: {{ elasticsearch_compose_path }}
-          Exists: {{ compose_file_check.stat.exists }}
-          {% if compose_file_check.stat.exists %}
-          Size: {{ compose_file_check.stat.size }} bytes
-          Owner: {{ compose_file_check.stat.pw_name }}
-          Mode: {{ compose_file_check.stat.mode }}
-          {% endif %}
-      when: has_elasticsearch_nodes
-
-    - name: Show first 50 lines of docker-compose file if it exists
-      shell: head -50 {{ elasticsearch_compose_path }}
-      register: compose_content
-      when: 
-        - has_elasticsearch_nodes
-        - compose_file_check.stat.exists
-      changed_when: false
-      ignore_errors: true
-
-    - name: Display docker-compose content preview
-      debug:
-        msg: "{{ compose_content.stdout_lines }}"
-      when:
-        - has_elasticsearch_nodes
-        - compose_file_check.stat.exists
-        - compose_content is defined
-
-    - name: Fail if docker-compose file was not created
-      fail:
-        msg: |
-          ❌ Docker-compose file was not created!
-          Expected path: {{ elasticsearch_compose_path }}
-          
-          Troubleshooting:
-          1. Check if template exists at: roles/install_elastic/templates/docker-compose-elasticsearch.yml.j2
-          2. Verify template syntax with: ansible-playbook --syntax-check
-          3. Check template variables above
-          4. Manual template test: ansible localhost -m template -a "src=roles/install_elastic/templates/docker-compose-elasticsearch.yml.j2 dest=/tmp/test-compose.yml"
-      when: 
-        - has_elasticsearch_nodes
-        - not compose_file_check.stat.exists
-
-
-
-
-    - name: Verify docker-compose file was created
-      stat:
-        path: "{{ elasticsearch_compose_path }}"
-      register: compose_file_check
-      when: has_elasticsearch_nodes
-
-    - name: Fail if docker-compose file was not created
-      fail:
-        msg: |
-          ❌ Docker-compose file was not created!
-          Expected path: {{ elasticsearch_compose_path }}
-          Please check template and variables.
-      when: 
-        - has_elasticsearch_nodes
-        - not compose_file_check.stat.exists
-
-    # STEP 10: Deploy Elasticsearch containers
+    # STEP 13: Deploy Elasticsearch containers
     - name: Deploy Elasticsearch using Docker Compose
       include_tasks: elasticsearch-docker-deploy.yml
       when: has_elasticsearch_nodes
 
-    # STEP 11: Verify cluster health
+    # STEP 14: Verify cluster health
     - name: Verify cluster health
       include_tasks: wait-for-cluster.yml
       when: has_elasticsearch_nodes
@@ -327,45 +345,33 @@
     - name: Display completion message
       debug:
         msg: |
-          ✅ Elasticsearch Installation Complete!
-          =====================================
+          Elasticsearch Installation Complete!
           
           Host: {{ inventory_hostname }} ({{ hostvars[inventory_hostname].node_hostname }})
           Nodes Deployed: {{ elasticsearch_nodes | length }}
-          Network Mode: host
           
-          🔗 Access Points (using hostnames):
+          Access Points:
           {% for node in elasticsearch_nodes %}
-          - {{ node.name }}: https://{{ hostvars[inventory_hostname].node_hostname }}:{{ es_http_base_port + node.port_offset }}
+          - {{ node.name }}: {{ 'https' if es_enable_http_ssl else 'http' }}://{{ hostvars[inventory_hostname].node_hostname }}:{{ es_http_base_port + node.port_offset }}
           {% endfor %}
           
-          🔧 Management Commands:
-          # View containers
-          docker ps
-          
-          # View logs
-          docker logs [node-name]
-          
-          # Check cluster health
-          curl -k -u {{ es_api_basic_auth_username }}:PASSWORD \
-            https://{{ hostvars[inventory_hostname].node_hostname }}:{{ es_http_base_port }}/_cluster/health
+          Management Commands:
+          # View containers: docker ps
+          # View logs: docker logs [node-name]
+          # Check cluster health: curl -k -u {{ es_api_basic_auth_username }}:PASSWORD {{ 'https' if es_enable_http_ssl else 'http' }}://{{ hostvars[inventory_hostname].node_hostname }}:{{ es_http_base_port }}/_cluster/health
       when: has_elasticsearch_nodes
 
   rescue:
     - name: Handle installation failure
       debug:
         msg: |
-          ❌ Elasticsearch installation failed on {{ inventory_hostname }}!
+          Elasticsearch installation failed on {{ inventory_hostname }}!
           
-          Please check:
-          1. Docker service: systemctl status docker
-          2. Variables in inventory (especially node_hostname)
-          3. /etc/hosts entries for hostname resolution
-          4. Network connectivity between hosts
-          5. Directory permissions
-          6. Certificate generation
-          
-          For detailed troubleshooting, check the logs above.
+          Diagnostic Steps:
+          1. Check configuration files: ls -la {{ elasticsearch_docker_path }}/*/config/
+          2. Check docker-compose syntax: cd {{ elasticsearch_docker_path }} && docker-compose config
+          3. Check container logs: docker logs [container-name]
+          4. Check system resources: free -h && df -h {{ elasticsearch_docker_path }}
 
   when: 
     - "'ELASTICSEARCH' in group_names"

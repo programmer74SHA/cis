@@ -1,5 +1,5 @@
 # roles/install_elastic/templates/docker-compose-elasticsearch.yml.j2
-# UPDATED: Using custom Docker bridge network with unique subnet per host
+# FIXED: Proper file mounting and error handling
 
 version: '3.8'
 
@@ -31,7 +31,7 @@ services:
       - "http.port={{ (es_http_base_port | int) + (node.port_offset | int) }}"
       - "transport.port={{ (es_transport_base_port | int) + (node.port_offset | int) }}"
       
-      # Discovery configuration - using hostnames
+      # Discovery configuration - FIXED: Using clean seed hosts list
       - "discovery.seed_hosts={{ elasticsearch_seed_hosts }}"
       - "cluster.initial_master_nodes={{ elasticsearch_master_node_names | join(',') }}"
       
@@ -70,12 +70,14 @@ services:
       - "{{ elasticsearch_docker_path }}/{{ node.name }}/data:/usr/share/elasticsearch/data:Z"
       - "{{ elasticsearch_docker_path }}/{{ node.name }}/logs:/usr/share/elasticsearch/logs:Z"
       
-      # Configuration
+      # Configuration files - FIXED: Ensure proper file mounting
       - "{{ elasticsearch_docker_path }}/{{ node.name }}/config/elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml:ro,Z"
       - "{{ elasticsearch_docker_path }}/{{ node.name }}/config/jvm.options:/usr/share/elasticsearch/config/jvm.options:ro,Z"
       
-      # Certificates
+{% if es_enable_http_ssl or es_enable_transport_ssl %}
+      # Certificates (only if SSL is enabled)
       - "{{ certs_base_path }}:/usr/share/elasticsearch/config/certs:ro,Z"
+{% endif %}
 
     ulimits:
       memlock:
