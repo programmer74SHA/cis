@@ -1,4 +1,7 @@
 ---
+# roles/install_kibana/tasks/start_kibana_service.yml
+# UPDATED: Using custom Docker bridge network
+
 - name: "Start Kibana Docker Service - BDA Only"
   block:
     - name: "Verify docker-compose file exists"
@@ -13,19 +16,19 @@
           Please run the configure_kibana task first.
       when: not compose_file_exists.stat.exists
 
-    - name: "Check if elastic network exists"
-      shell: docker network ls | grep -q "elastic"
+    - name: "Check if Docker network exists"
+      shell: docker network ls --format "{{ '{{' }}.Name{{ '}}' }}" | grep -x "{{ docker_network_name }}"
       register: network_exists
       failed_when: false
       changed_when: false
 
-    - name: "Create elastic network if it doesn't exist"
+    - name: "Create custom Docker bridge network if it doesn't exist"
       docker_network:
-        name: elastic
+        name: "{{ docker_network_name }}"
         driver: bridge
         ipam_config:
-          - subnet: "172.20.0.0/16"
-            gateway: "192.168.180.1"
+          - subnet: "{{ docker_network_subnet }}"
+        state: present
       when: network_exists.rc != 0
 
     - name: "Stop existing Kibana container if running"
@@ -100,6 +103,7 @@
           =================================
           
           Container: kibana-{{ inventory_hostname }}
+          Network: {{ docker_network_name }} ({{ docker_network_subnet }})
           Status: {{ 'Running' if 'Up' in container_status.stdout else 'Failed' }}
           Health: {{ 'Ready' if kibana_health.status in [200, 401] else 'Not Ready' }}
           
@@ -117,6 +121,9 @@
           
           # Check docker-compose status
           cd {{ kibana_docker_path }} && docker-compose ps
+          
+          # Check network
+          docker network inspect {{ docker_network_name }}
           
           # Restart Kibana
           cd {{ kibana_docker_path }} && docker-compose restart
@@ -138,7 +145,7 @@
              cat {{ kibana_compose_path }}
           
           4. Check network connectivity:
-             docker network ls | grep elastic
+             docker network inspect {{ docker_network_name }}
           
           5. Manual restart:
              cd {{ kibana_docker_path }}

@@ -1,5 +1,5 @@
 # roles/install_kibana/templates/docker-compose-kibana.yml.j2
-# UPDATED: Using host network mode and hostnames
+# UPDATED: Using custom Docker bridge network
 
 version: '3.8'
 
@@ -10,11 +10,16 @@ services:
     hostname: {{ hostvars[inventory_hostname].node_hostname }}
     restart: unless-stopped
     
-    # UPDATED: Use host network mode
-    network_mode: host
+    # Connect to custom Docker bridge network
+    networks:
+      - {{ docker_network_name }}
+    
+    # Expose Kibana port on host interface
+    ports:
+      - "{{ hostvars[inventory_hostname].ansible_host }}:5601:5601"
     
     environment:
-      # Elasticsearch Configuration - UPDATED: Using hostname
+      # Elasticsearch Configuration - using hostname
       - "ELASTICSEARCH_HOSTS=https://{{ hostvars[inventory_hostname].node_hostname }}:9200"
 {%- if es_service_token is defined and es_service_token != '' %}
       - "ELASTICSEARCH_SERVICEACCOUNTTOKEN={{ es_service_token }}"
@@ -25,8 +30,8 @@ services:
       - "ELASTICSEARCH_SSL_CERTIFICATEAUTHORITIES=/usr/share/kibana/config/certs/ca/ca.crt"
       - "ELASTICSEARCH_SSL_VERIFICATIONMODE=certificate"
       
-      # Server Configuration - UPDATED: Using hostname
-      - "SERVER_HOST={{ hostvars[inventory_hostname].node_hostname }}"
+      # Server Configuration - bind to all interfaces
+      - "SERVER_HOST=0.0.0.0"
       - "SERVER_PORT=5601"
       - "SERVER_NAME={{ inventory_hostname }}-kibana"
       - "SERVER_PUBLICBASEURL=https://{{ hostvars[inventory_hostname].node_hostname }}:5601"
@@ -65,7 +70,7 @@ services:
     healthcheck:
       test: 
         - "CMD-SHELL"
-        - "curl -f -k https://{{ hostvars[inventory_hostname].node_hostname }}:5601/api/status || exit 1"
+        - "curl -f -k https://127.0.0.1:5601/api/status || exit 1"
       interval: 30s
       timeout: 30s
       retries: 10
@@ -85,3 +90,11 @@ services:
     # Ensure container restarts unless stopped
     restart: unless-stopped
 
+# Custom Docker bridge network with unique subnet
+networks:
+  {{ docker_network_name }}:
+    name: {{ docker_network_name }}
+    driver: bridge
+    ipam:
+      config:
+        - subnet: {{ docker_network_subnet }}

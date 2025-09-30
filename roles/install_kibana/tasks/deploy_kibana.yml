@@ -1,6 +1,6 @@
 ---
 # roles/install_kibana/tasks/deploy_kibana.yml
-# Deploy Kibana using Docker Compose
+# UPDATED: Using custom Docker bridge network
 
 - name: Verify docker-compose file exists
   stat:
@@ -14,19 +14,19 @@
       Please run the configure_kibana task first.
   when: not compose_file_exists.stat.exists
 
-- name: Check if elastic network exists
-  shell: docker network ls | grep -q "elastic"
+- name: Check if Docker network exists
+  shell: docker network ls --format "{{ '{{' }}.Name{{ '}}' }}" | grep -x "{{ docker_network_name }}"
   register: network_exists
-  failed_when: false
   changed_when: false
+  failed_when: false
 
-- name: Create elastic network if it doesn't exist
+- name: Create custom Docker bridge network if it doesn't exist
   docker_network:
-    name: elastic
+    name: "{{ docker_network_name }}"
     driver: bridge
     ipam_config:
       - subnet: "{{ docker_network_subnet }}"
-        gateway: "192.168.180.1"
+    state: present
   when: network_exists.rc != 0
 
 - name: Stop existing Kibana container if running
@@ -69,6 +69,7 @@
       =================================
       
       Container: kibana-{{ inventory_hostname }}
+      Network: {{ docker_network_name }} ({{ docker_network_subnet }})
       Status: {{ 'Running' if 'Up' in container_status.stdout else 'Starting' }}
       
       🌐 Access Information:
@@ -82,6 +83,9 @@
       
       # Check container logs
       docker logs kibana-{{ inventory_hostname }}
+      
+      # Check network
+      docker network inspect {{ docker_network_name }}
       
       # Restart Kibana
       cd {{ kibana_docker_path }} && docker-compose restart

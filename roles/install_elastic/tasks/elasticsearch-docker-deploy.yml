@@ -1,6 +1,6 @@
 ---
 # roles/install_elastic/tasks/elasticsearch-docker-deploy.yml
-# FIXED: Simplified Docker deployment task
+# UPDATED: Using custom Docker bridge network per host
 
 - name: Display Docker deployment banner
   debug:
@@ -8,16 +8,14 @@
       🐳 Elasticsearch Docker Deployment
       =================================
       Host: {{ inventory_hostname }}
+      Network: {{ docker_network_name }} ({{ docker_network_subnet }})
       Nodes: {{ elasticsearch_nodes | length }}
 
-- name: Create Docker network for Elasticsearch
-  docker_network:
-    name: elastic
-    driver: bridge
-    ipam_config:
-      - subnet: "{{ docker_network_subnet }}"
-        gateway: "192.168.180.1"
-  ignore_errors: true
+- name: Verify Docker network exists
+  shell: docker network ls --format "{{ '{{' }}.Name{{ '}}' }}" | grep -x "{{ docker_network_name }}"
+  register: network_exists
+  changed_when: false
+  failed_when: network_exists.rc != 0
 
 - name: Check if Docker Compose file exists
   stat:
@@ -64,12 +62,13 @@
       =======================================
       
       Host: {{ inventory_hostname }}
+      Network: {{ docker_network_name }} ({{ docker_network_subnet }})
       Expected containers: {{ elasticsearch_nodes | length }}
       Running containers: {{ running_containers.stdout | default('Unknown') }}
       
       📋 Deployed Nodes:
       {% for node in elasticsearch_nodes %}
-      - {{ node.name }}: {{ 'https' if es_enable_http_ssl else 'http' }}://{{ ansible_default_ipv4.address }}:{{ es_http_base_port + node.port_offset }}
+      - {{ node.name }}: {{ 'https' if es_enable_http_ssl else 'http' }}://{{ hostvars[inventory_hostname].node_hostname }}:{{ es_http_base_port + node.port_offset }}
       {% endfor %}
       
       🔧 Management Commands:
@@ -78,6 +77,9 @@
       
       # View logs
       cd {{ elasticsearch_docker_path }} && docker-compose logs [node-name]
+      
+      # Check network
+      docker network inspect {{ docker_network_name }}
       
       # Restart services
       cd {{ elasticsearch_docker_path }} && docker-compose restart

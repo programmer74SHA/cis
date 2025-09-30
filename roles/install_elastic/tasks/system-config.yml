@@ -1,7 +1,7 @@
 ---
 # roles/install_elastic/tasks/system-config.yml
 # System configuration for Elasticsearch
-# UPDATED: Removed Docker network creation (using host network)
+# UPDATED: Create custom Docker bridge network per host
 
 - name: Create Elasticsearch directories
   file:
@@ -40,7 +40,44 @@
   debug:
     msg: "Docker installed: {{ docker_version.stdout }}"
 
-# NOTE: Removed Docker network creation since we're using host network mode
+# UPDATED: Create custom Docker bridge network for this host
+- name: Check if Docker network exists
+  shell: docker network ls --format "{{ '{{' }}.Name{{ '}}' }}" | grep -x "{{ docker_network_name }}"
+  register: network_check
+  changed_when: false
+  failed_when: false
+
+- name: Remove existing Docker network if subnet doesn't match
+  shell: |
+    CURRENT_SUBNET=$(docker network inspect {{ docker_network_name }} --format "{{ '{{' }}range .IPAM.Config{{ '}}' }}{{ '{{' }}.Subnet{{ '}}' }}{{ '{{' }}end{{ '}}' }}")
+    if [ "$CURRENT_SUBNET" != "{{ docker_network_subnet }}" ]; then
+      docker network rm {{ docker_network_name }}
+      exit 0
+    else
+      exit 1
+    fi
+  when: network_check.rc == 0
+  register: network_removed
+  failed_when: false
+  changed_when: network_removed.rc == 0
+
+- name: Create custom Docker bridge network for Elasticsearch
+  docker_network:
+    name: "{{ docker_network_name }}"
+    driver: bridge
+    ipam_config:
+      - subnet: "{{ docker_network_subnet }}"
+    state: present
+  register: network_creation
+
+- name: Display Docker network information
+  debug:
+    msg: |
+      🌐 Docker Network Configuration
+      ==============================
+      Network Name: {{ docker_network_name }}
+      Subnet: {{ docker_network_subnet }}
+      Status: {{ 'Created' if network_creation.changed else 'Already exists' }}
 
 # System configuration
 - name: Configure kernel parameters for Elasticsearch
@@ -95,9 +132,7 @@
       ✅ System Configuration Complete
       ==============================
       - Docker: {{ docker_version.stdout }}
-      - Network Mode: host (no Docker network needed)
+      - Network: {{ docker_network_name }} ({{ docker_network_subnet }})
       - Kernel: vm.max_map_count set to 262144
       - Limits: File and memory limits configured
       - Swap: Disabled for optimal performance
-      
-      ⚠️  Important: Ensure /etc/hosts is configured with all cluster hostnames!

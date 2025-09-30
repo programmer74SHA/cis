@@ -1,5 +1,5 @@
 # roles/install_elastic/templates/docker-compose-elasticsearch.yml.j2
-# UPDATED: Using host network mode and hostnames
+# UPDATED: Using custom Docker bridge network with unique subnet per host
 
 version: '3.8'
 
@@ -11,21 +11,27 @@ services:
     hostname: {{ node.name }}.{{ top_level_domain }}
     restart: unless-stopped
     
-    # UPDATED: Use host network mode
-    network_mode: host
+    # Connect to custom Docker bridge network
+    networks:
+      - {{ docker_network_name }}
+    
+    # Expose ports on host interface
+    ports:
+      - "{{ hostvars[inventory_hostname].ansible_host }}:{{ (es_http_base_port | int) + (node.port_offset | int) }}:{{ (es_http_base_port | int) + (node.port_offset | int) }}"
+      - "{{ hostvars[inventory_hostname].ansible_host }}:{{ (es_transport_base_port | int) + (node.port_offset | int) }}:{{ (es_transport_base_port | int) + (node.port_offset | int) }}"
     
     environment:
       # Node identification
       - "node.name={{ node.name }}"
       - "cluster.name={{ es_cluster_name }}"
       
-      # Network configuration - UPDATED: bind to specific hostname
-      - "network.host={{ hostvars[inventory_hostname].node_hostname }}"
+      # Network configuration - bind to all interfaces inside container
+      - "network.host=0.0.0.0"
       - "network.publish_host={{ hostvars[inventory_hostname].node_hostname }}"
       - "http.port={{ (es_http_base_port | int) + (node.port_offset | int) }}"
       - "transport.port={{ (es_transport_base_port | int) + (node.port_offset | int) }}"
       
-      # Discovery configuration - UPDATED: using hostnames
+      # Discovery configuration - using hostnames
       - "discovery.seed_hosts={{ elasticsearch_seed_hosts }}"
       - "cluster.initial_master_nodes={{ elasticsearch_master_node_names | join(',') }}"
       
@@ -83,9 +89,9 @@ services:
       test: 
         - "CMD-SHELL"
 {% if es_enable_http_ssl and es_api_basic_auth_password is defined %}
-        - "curl -f -k -u {{ es_api_basic_auth_username }}:{{ es_api_basic_auth_password }} https://{{ hostvars[inventory_hostname].node_hostname }}:{{ (es_http_base_port | int) + (node.port_offset | int) }}/_cluster/health?timeout=30s || exit 1"
+        - "curl -f -k -u {{ es_api_basic_auth_username }}:{{ es_api_basic_auth_password }} https://127.0.0.1:{{ (es_http_base_port | int) + (node.port_offset | int) }}/_cluster/health?timeout=30s || exit 1"
 {% else %}
-        - "curl -f http://{{ hostvars[inventory_hostname].node_hostname }}:{{ (es_http_base_port | int) + (node.port_offset | int) }}/_cluster/health?timeout=30s || exit 1"
+        - "curl -f http://127.0.0.1:{{ (es_http_base_port | int) + (node.port_offset | int) }}/_cluster/health?timeout=30s || exit 1"
 {% endif %}
       interval: 30s
       timeout: 30s
@@ -104,4 +110,11 @@ services:
 
 {% endfor %}
 
-# NOTE: networks section removed as we're using host network mode
+# Custom Docker bridge network with unique subnet per host
+networks:
+  {{ docker_network_name }}:
+    name: {{ docker_network_name }}
+    driver: bridge
+    ipam:
+      config:
+        - subnet: {{ docker_network_subnet }}
