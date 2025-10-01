@@ -1,6 +1,6 @@
 ---
 # roles/install_kibana/tasks/deploy_kibana.yml
-# UPDATED: Using custom Docker bridge network
+# FIXED: Use existing Elasticsearch Docker network
 
 - name: Verify docker-compose file exists
   stat:
@@ -14,19 +14,31 @@
       Please run the configure_kibana task first.
   when: not compose_file_exists.stat.exists
 
-- name: Check if Docker network exists
+- name: Verify Elasticsearch Docker network exists
   shell: docker network ls --format "{{ '{{' }}.Name{{ '}}' }}" | grep -x "{{ docker_network_name }}"
   register: network_exists
   changed_when: false
-  failed_when: false
+  failed_when: network_exists.rc != 0
+  ignore_errors: false
 
-- name: Create custom Docker bridge network if it doesn't exist
-  docker_network:
-    name: "{{ docker_network_name }}"
-    driver: bridge
-    ipam_config:
-      - subnet: "{{ docker_network_subnet }}"
-    state: present
+- name: Display network information
+  debug:
+    msg: |
+      🌐 Docker Network Check
+      ======================
+      Network Name: {{ docker_network_name }}
+      Network Status: {{ 'Found' if network_exists.rc == 0 else 'Not Found' }}
+
+- name: Fail if Elasticsearch network doesn't exist
+  fail:
+    msg: |
+      ❌ Elasticsearch Docker network '{{ docker_network_name }}' not found!
+      
+      This network should have been created during Elasticsearch installation.
+      Please ensure Elasticsearch is installed and running first.
+      
+      To check existing networks: docker network ls
+      To create manually: docker network create --driver bridge --subnet {{ docker_network_subnet }} {{ docker_network_name }}
   when: network_exists.rc != 0
 
 - name: Stop existing Kibana container if running
@@ -58,18 +70,20 @@
   delay: 10
   ignore_errors: true
 
-- name: Display container status
-  debug:
-    msg: "Kibana container status: {{ container_status.stdout }}"
+- name: Verify Kibana is on the correct network
+  shell: docker inspect kibana-{{ inventory_hostname }} --format '{% raw %}{{range $key, $value := .NetworkSettings.Networks}}{{$key}}{{end}}{% endraw %}'
+  register: kibana_network
+  changed_when: false
 
-- name: Show final status and access information
+- name: Display container status and network
   debug:
     msg: |
       🚀 Kibana Docker Deployment Status
       =================================
       
       Container: kibana-{{ inventory_hostname }}
-      Network: {{ docker_network_name }} ({{ docker_network_subnet }})
+      Network: {{ kibana_network.stdout }}
+      Expected Network: {{ docker_network_name }}
       Status: {{ 'Running' if 'Up' in container_status.stdout else 'Starting' }}
       
       🌐 Access Information:
@@ -84,8 +98,30 @@
       # Check container logs
       docker logs kibana-{{ inventory_hostname }}
       
-      # Check network
+      # Check network connectivity
       docker network inspect {{ docker_network_name }}
+      
+      # Test Elasticsearch connectivity from Kibana container
+      docker exec kibana-{{ inventory_hostname }} curl -k https://{{ hostvars[inventory_hostname].node_hostname }}:9200
       
       # Restart Kibana
       cd {{ kibana_docker_path }} && docker-compose restart
+
+- name: Verify network connectivity to Elasticsearch
+  shell: |
+    docker exec kibana-{{ inventory_hostname }} curl -k -s -o /dev/null -w "%{http_code}" https://{{ hostvars[inventory_hostname].node_hostname }}:9200
+  register: es_connectivity
+  ignore_errors: true
+  changed_when: false
+
+- name: Display connectivity test result
+  debug:
+    msg: |
+      🔗 Elasticsearch Connectivity Test
+      ==================================
+      HTTP Status: {{ es_connectivity.stdout if es_connectivity.rc == 0 else 'Failed' }}
+      {% if es_connectivity.rc == 0 and es_connectivity.stdout in ['200', '401'] %}
+      ✅ Kibana can reach Elasticsearch successfully!
+      {% else %}
+      ⚠️  Connectivity issue detected. Check network and Elasticsearch status.
+      {% endif %}

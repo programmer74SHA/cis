@@ -103,6 +103,9 @@ all:
           ansible_connection: ssh
           ansible_ssh_common_args: '-o StrictHostKeyChecking=no'
           node_hostname: bda.apk-siem.local
+          # ADDED: Docker network configuration for BDA
+          docker_network_name: 'elastic'
+          # docker_network_subnet: '172.33.0.0/16'
           # Service configuration for BDA
           install_kibana: true
           install_elasticsearch: true
@@ -234,7 +237,7 @@ all:
     kibana_host: '0.0.0.0'
     kibana_elasticsearch_hosts: 'https://bda.apk-siem.local:9200'
     kibana_elasticsearch_username: 'kibana_system'
-    kibana_elasticsearch_password: 'YourVerySecureKibanaSystemPassword123!'
+    kibana_elasticsearch_password: 'NewKibanaSystemPassword123!'
     
     # Performance settings
     disable_swap_permanently: true

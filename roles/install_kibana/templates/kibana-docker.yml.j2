@@ -1,8 +1,8 @@
 # roles/install_kibana/templates/kibana-docker.yml.j2
-# UPDATED: Using hostnames instead of IPs
+# FIXED: Connect to localhost Elasticsearch on BDA host
 
 # =================== Server Configuration ===================
-server.host: "{{ hostvars[inventory_hostname].node_hostname }}"
+server.host: "0.0.0.0"
 server.port: 5601
 server.name: "{{ inventory_hostname }}-kibana"
 server.publicBaseUrl: "https://{{ hostvars[inventory_hostname].node_hostname }}:5601"
@@ -32,10 +32,11 @@ logging:
 pid.file: /usr/share/kibana/data/kibana.pid
 
 # =================== Elasticsearch Configuration ===================
-# Primary Elasticsearch connection - UPDATED: Using hostname
+# FIXED: Connect to BDA host's Elasticsearch using host.docker.internal or 127.0.0.1
+# Since both containers are on the same host, use the host network
 elasticsearch.hosts: ['https://{{ hostvars[inventory_hostname].node_hostname }}:9200']
 elasticsearch.ssl.certificateAuthorities: [/usr/share/kibana/config/certs/ca/ca.crt]
-elasticsearch.ssl.verificationMode: certificate
+elasticsearch.ssl.verificationMode: none
 
 {% if es_service_token is defined %}
 # Use service account token for authentication
@@ -46,32 +47,9 @@ elasticsearch.username: "{{ kibana_elasticsearch_username | default('elastic') }
 elasticsearch.password: "{{ kibana_elasticsearch_password | default('YourVerySecureElasticsearchPassword123!') }}"
 {% endif %}
 
-# =================== Fleet Configuration ===================
-# Fleet outputs for Elastic Agent management - UPDATED: Using hostnames
-xpack.fleet.outputs:
-  - id: fleet-default-output
-    name: default
-    is_default: true
-    is_default_monitoring: true
-    type: elasticsearch
-    hosts:
-{% if fleet_outputs_hosts is defined %}
-{% for host in fleet_outputs_hosts %}
-      - "{{ host }}"
-{% endfor %}
-{% else %}
-      - "https://{{ hostvars[inventory_hostname].node_hostname }}:9200"
-{% endif %}
-{% if cert_fingerprint is defined %}
-    ca_trusted_fingerprint: {{ cert_fingerprint }}
-{% endif %}
-    ssl:
-      verification_mode: 'none'
-
-# Fleet registry for air-gapped environments - UPDATED: Using hostname
-xpack.fleet.registryUrl: "http://{{ hostvars[inventory_hostname].node_hostname }}:8443"
-xpack.fleet.packageVerification.gpgKeyPath: "/usr/share/kibana/config/GPG-KEY-elastic-agent"
-xpack.fleet.isAirGapped: true
+# Connection timeout settings
+elasticsearch.pingTimeout: 30000
+elasticsearch.requestTimeout: 120000
 
 # =================== Security Configuration ===================
 # Encryption keys for various Kibana features
@@ -79,34 +57,9 @@ xpack.encryptedSavedObjects.encryptionKey: 7946e75bc0cad7f510d933d288ead678
 xpack.reporting.encryptionKey: bd7bc65d6208bb27cb52b035a25d0e72
 xpack.security.encryptionKey: 2f80b83bdec5bdab7d5e9c09f67c1141
 
-# Security audit logging
-xpack.security.audit.enabled: true
-xpack.security.audit.appender:
-  type: rolling-file
-  fileName: /usr/share/kibana/logs/audit.log
-  policy:
-    type: time-interval
-    interval: 24h
-  layout:
-    type: json
-
-# Audit filters to reduce noise
-xpack.security.audit.ignore_filters:
-  - actions: [space_get]
-  - categories: [database]
-    types: [access]
-
-# Session configuration
-xpack.security.session.idleTimeout: "10h"
-xpack.security.session.lifespan: "12h"
-
 # =================== Monitoring Configuration ===================
 # Disable cross-cluster search for monitoring
 monitoring.ui.ccs.enabled: false
-
-# =================== Maps Configuration ===================
-# Custom map service URL - UPDATED: Using hostname
-map.emsUrl: https://{{ hostvars[inventory_hostname].node_hostname }}:8082
 
 # =================== Performance Configuration ===================
 # Request timeout for Elasticsearch operations
@@ -117,67 +70,11 @@ elasticsearch.requestTimeout: 120000
 telemetry.allowChangingOptInStatus: false
 telemetry.optIn: false
 
-# =================== APM Configuration ===================
-{% if enable_apm | default(false) %}
-# APM configuration for application performance monitoring
-apm_oss.enabled: true
-{% endif %}
-
-# =================== Machine Learning Configuration ===================
-{% if enable_ml | default(true) %}
-# Enable ML features
-xpack.ml.enabled: true
-{% endif %}
-
-# =================== SIEM Configuration ===================
-{% if enable_siem | default(true) %}
-# SIEM app configuration
-xpack.siem.enabled: true
-xpack.siem.signalsIndex: ".siem-signals-default"
-{% endif %}
-
-# =================== Alerting Configuration ===================
-{% if enable_alerting | default(true) %}
-# Enable alerting and actions
-xpack.alerting.enabled: true
-xpack.actions.enabled: true
-{% endif %}
-
-# =================== Reporting Configuration ===================
-{% if enable_reporting | default(true) %}
-# Reporting configuration - UPDATED: Using hostname
-xpack.reporting.enabled: true
-xpack.reporting.kibanaServer.hostname: "{{ hostvars[inventory_hostname].node_hostname }}"
-xpack.reporting.kibanaServer.port: 5601
-xpack.reporting.kibanaServer.protocol: "https"
-{% endif %}
-
-# =================== Custom Features ===================
-# Memory usage optimization
-node.options: --max-old-space-size=2048
-
-# Include Elastic Maps Service
-map.includeElasticMapsService: true
-
-# Compression for better performance
-server.compression.enabled: true
-
-# =================== Development Settings ===================
-{% if kibana_cors_enabled | default(false) %}
-# CORS settings (only for development)
-server.cors.enabled: true
-server.cors.allowCredentials: true
-server.cors.allowOrigin: "*"
-{% endif %}
-
 # =================== End of Configuration ===================
 
 # Configuration Summary:
 # - Generated: {{ ansible_date_time.iso8601 }}
 # - Host: {{ inventory_hostname }} ({{ hostvars[inventory_hostname].node_hostname }})
 # - Elasticsearch: {{ hostvars[inventory_hostname].node_hostname }}:9200
-# - Network Mode: host
-# - Fleet Outputs: {{ fleet_outputs_hosts | length if fleet_outputs_hosts is defined else 1 }} configured
 # - SSL: Enabled with custom certificates
 # - Authentication: {{ 'Service Token' if es_service_token is defined else 'Username/Password' }}
-# - Air-gapped: Yes

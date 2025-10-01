@@ -31,11 +31,11 @@
       tags: [always]
     
     # Install Elasticsearch on all nodes with elasticsearch_nodes defined
-    # - role: install_elastic
-    #   when: >
-    #     ('ELASTICSEARCH' in group_names) and 
-    #     (hostvars[inventory_hostname].get('elasticsearch_nodes', []) | length > 0)
-    #   tags: [cluster, simple, elasticsearch]
+    - role: install_elastic
+      when: >
+        ('ELASTICSEARCH' in group_names) and 
+        (hostvars[inventory_hostname].get('elasticsearch_nodes', []) | length > 0)
+      tags: [cluster, simple, elasticsearch]
     
     # Install Kibana only on BDA nodes
     - role: install_kibana

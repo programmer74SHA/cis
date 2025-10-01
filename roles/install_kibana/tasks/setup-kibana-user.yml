@@ -17,7 +17,7 @@
 
 - name: Wait for Elasticsearch to be ready for user setup
   uri:
-    url: "{{ es_protocol }}://{{ es_endpoint_host }}:{{ es_endpoint_port }}/"
+    url: "{{ es_protocol }}://{{ es_endpoint_host }}:{{ es_endpoint_port }}/_cluster/health"
     method: GET
     user: "{{ es_api_basic_auth_username }}"
     password: "{{ es_api_basic_auth_password }}"
@@ -31,18 +31,19 @@
   delay: 10
   when: es_api_basic_auth_password is defined
 
-- name: Check if kibana_system password is already set
+- name: Test if kibana_system password is already correct
   uri:
-    url: "{{ es_protocol }}://{{ es_endpoint_host }}:{{ es_endpoint_port }}/_security/user/kibana_system"
+    url: "{{ es_protocol }}://{{ es_endpoint_host }}:{{ es_endpoint_port }}/_security/_authenticate"
     method: GET
-    user: "{{ es_api_basic_auth_username }}"
-    password: "{{ es_api_basic_auth_password }}"
+    user: "kibana_system"
+    password: "{{ kibana_elasticsearch_password }}"
     force_basic_auth: yes
     validate_certs: no
-    status_code: [200, 404]
+    status_code: [200, 401]
     timeout: 30
-  register: kibana_user_check
+  register: kibana_password_test
   ignore_errors: true
+  when: es_api_basic_auth_password is defined
 
 - name: Set kibana_system user password
   uri:
@@ -58,7 +59,25 @@
     status_code: [200]
     timeout: 30
   register: kibana_password_set
-  when: es_api_basic_auth_password is defined
+  when:
+    - es_api_basic_auth_password is defined
+    - kibana_password_test.status is defined
+    - kibana_password_test.status != 200
+
+- name: Verify kibana_system password was set correctly
+  uri:
+    url: "{{ es_protocol }}://{{ es_endpoint_host }}:{{ es_endpoint_port }}/_security/_authenticate"
+    method: GET
+    user: "kibana_system"
+    password: "{{ kibana_elasticsearch_password }}"
+    force_basic_auth: yes
+    validate_certs: no
+    status_code: [200]
+    timeout: 30
+  register: kibana_password_verify
+  when:
+    - es_api_basic_auth_password is defined
+    - kibana_password_set is changed
 
 - name: Display kibana_system password setup result
   debug:
@@ -68,5 +87,80 @@
       Elasticsearch Endpoint: {{ es_protocol }}://{{ es_endpoint_host }}:{{ es_endpoint_port }}
       Username: kibana_system
       Password: [CONFIGURED]
-      Status: {{ 'Password set successfully' if kibana_password_set.status == 200 else 'Check required' }}
-  when: kibana_password_set is defined
+      Status: {% if kibana_password_test.status == 200 %}Password already correct - no change needed{% elif kibana_password_verify.status == 200 %}Password set and verified successfully{% elif kibana_password_set.status == 200 %}Password set successfully{% else %}Check required{% endif %}
+
+- name: Create or update logstash_writer role
+  uri:
+    url: "{{ es_protocol }}://{{ es_endpoint_host }}:{{ es_endpoint_port }}/_security/role/logstash_writer"
+    method: PUT
+    user: "{{ es_api_basic_auth_username }}"
+    password: "{{ es_api_basic_auth_password }}"
+    force_basic_auth: yes
+    validate_certs: no
+    body_format: json
+    body:
+      cluster:
+        - manage_index_templates
+        - monitor
+        - manage_ilm
+      indices:
+        - names:
+            - "logstash-*"
+            - "logs-*"
+            - "metrics-*"
+          privileges:
+            - write
+            - create
+            - create_index
+            - manage
+            - manage_ilm
+    status_code: [200, 201]
+    timeout: 30
+  register: logstash_role_created
+  when: es_api_basic_auth_password is defined
+
+- name: Create or update logstash_internal user
+  uri:
+    url: "{{ es_protocol }}://{{ es_endpoint_host }}:{{ es_endpoint_port }}/_security/user/logstash_internal"
+    method: POST
+    user: "{{ es_api_basic_auth_username }}"
+    password: "{{ es_api_basic_auth_password }}"
+    force_basic_auth: yes
+    validate_certs: no
+    body_format: json
+    body:
+      password: "{{ logstash_elasticsearch_password | default('YourVerySecureLogstashPassword123!') }}"
+      roles:
+        - logstash_writer
+      full_name: "Logstash Internal User"
+      email: "logstash@{{ hostvars[inventory_hostname].node_hostname }}"
+    status_code: [200, 201]
+    timeout: 30
+  register: logstash_user_created
+  when: es_api_basic_auth_password is defined
+
+- name: Verify logstash_internal user was created correctly
+  uri:
+    url: "{{ es_protocol }}://{{ es_endpoint_host }}:{{ es_endpoint_port }}/_security/_authenticate"
+    method: GET
+    user: "logstash_internal"
+    password: "{{ logstash_elasticsearch_password | default('YourVerySecureLogstashPassword123!') }}"
+    force_basic_auth: yes
+    validate_certs: no
+    status_code: [200]
+    timeout: 30
+  register: logstash_user_verify
+  when:
+    - es_api_basic_auth_password is defined
+    - logstash_user_created is changed
+
+- name: Display user creation summary
+  debug:
+    msg: |
+      ✅ Elasticsearch Users Configuration Summary
+      =========================================
+      Kibana System User: {% if kibana_password_test.status == 200 or kibana_password_verify.status == 200 %}✓ Configured{% else %}✗ Check logs{% endif %}
+
+      Logstash Writer Role: {% if logstash_role_created.status in [200, 201] %}✓ Created/Updated{% else %}✗ Check logs{% endif %}
+
+      Logstash Internal User: {% if logstash_user_verify.status == 200 %}✓ Created and Verified{% elif logstash_user_created.status in [200, 201] %}✓ Created{% else %}✗ Check logs{% endif %}

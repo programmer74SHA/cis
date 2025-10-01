@@ -1,9 +1,0 @@
-- name: Ensure destination directory exists
-  file:
-    path: "{{ cert_dest_dir }}"
-    state: directory
-    mode: '0755'
-- name: copy CA to APK_ALERT config
-  copy:
-    src: "{{ cert_dir }}/ca/ca.crt"
-    dest: "{{ CA_dest }}"
