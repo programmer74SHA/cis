@@ -1,0 +1,18 @@
+# pyproject.toml
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "netbox-scanner-plugin"
+version = "1.0.0"
+authors = [
+    {name = "Your Name", email = "your.email@example.com"},
+]
+description = "Network discovery and scanner management for NetBox"
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+    "python-nmap",
+    "netmiko",
+]

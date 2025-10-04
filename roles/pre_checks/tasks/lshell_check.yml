@@ -1,5 +1,0 @@
----
-
-- name: Fail if Lshell_user_password is not defined
-  meta: end_play
-  when: Lshell_user_password is not defined or Lshell_user_password == ""

@@ -1,5 +1,0 @@
-net_core_rmem_max: 67108864
-net_core_rmem_default: 67108864
-disable_ipv6: 1
-
-bash_history_size : 10000

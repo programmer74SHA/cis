@@ -1,8 +1,0 @@
-LSHELL_CACHE_DIRECTORY: "/var/cache/siem/lshell"
-LSHELL_CONFIG_FILE_PATH: "/etc/lshell.conf"
-LSHELL_USER: support
-SUDO_COMMANDS:
-  - dpkg
-  - sudo
-  - ssh
-  - tcpdump

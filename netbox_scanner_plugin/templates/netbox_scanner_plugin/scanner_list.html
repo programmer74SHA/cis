@@ -1,0 +1,10 @@
+{% extends 'generic/object_list.html' %}
+{% load buttons %}
+
+{% block buttons %}
+<div class="btn-group" role="group">
+    <a href="{% url 'plugins:netbox_scanner_plugin:scanner_add' %}" class="btn btn-primary">
+        <i class="mdi mdi-plus-thick"></i> Add Scanner
+    </a>
+</div>
+{% endblock %}

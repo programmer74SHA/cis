@@ -1,0 +1,178 @@
+{% extends 'base/layout.html' %}
+{% load buttons %}
+
+{% block header %}
+    <div class="container">
+        <div class="row">
+            <div class="col-8">
+                <h1>
+                    {% block title %}Scanner: {{ object.name }}{% endblock %}
+                </h1>
+            </div>
+            <div class="col-4 text-end">
+                <!-- دکمه اجرای اسکن -->
+                <form id="run-scan-form" method="post" action="{% url 'plugins:netbox_scanner_plugin:run_scan' pk=object.pk %}">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-primary" id="run-scan-button">
+                        <i class="mdi mdi-play"></i> Run Scan
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+{% endblock header %}
+
+{% block content %}
+    <div class="container mb-3">
+        <div class="card">
+            <div class="card-header">
+                <h5>Scanner Details</h5>
+            </div>
+            <div class="card-body">
+                <table class="table table-hover">
+                    <tr>
+                        <th>Name</th>
+                        <td>{{ object.name }}</td>
+                    </tr>
+                    <tr>
+                        <th>Type</th>
+                        <td>{{ object.get_scanner_type_display }}</td>
+                    </tr>
+                    <tr>
+                        <th>Enabled</th>
+                        <td>
+                            {% if object.enabled %}
+                                <span class="badge bg-success">Yes</span>
+                            {% else %}
+                                <span class="badge bg-danger">No</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% if object.scanner_type == 'network_range' %}
+                    <tr>
+                        <th>IP Range</th>
+                        <td>{{ object.ip_range }}</td>
+                    </tr>
+                    {% elif object.scanner_type == 'cisco_switch' %}
+                    <tr>
+                        <th>Target Host</th>
+                        <td>{{ object.target_host }}</td>
+                    </tr>
+                    {% endif %}
+                </table>
+            </div>
+        </div>
+
+        <!-- بخش تاریخچه نتایج اسکن -->
+        <div class="card mt-4">
+            <div class="card-header">
+                <h5>Scan History</h5>
+            </div>
+            <div class="card-body">
+                {% if object.scan_results.all %}
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Started</th>
+                                <th>Completed</th>
+                                <th>Status</th>
+                                <th>Summary</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for result in object.scan_results.all %}
+                            <tr>
+                                <td>{{ result.started }}</td>
+                                <td>{{ result.completed|default:"-" }}</td>
+                                <td>
+                                    <span class="badge 
+                                        {% if result.status == 'completed' %}bg-success
+                                        {% elif result.status == 'failed' %}bg-danger
+                                        {% elif result.status == 'running' %}bg-warning
+                                        {% else %}bg-secondary{% endif %}">
+                                        {{ result.get_status_display }}
+                                    </span>
+                                </td>
+                                <td>
+                                    {% if result.output %}
+                                        {% if object.scanner_type == 'network_range' %}
+                                            Discovered {{ result.output.discovered_hosts|length }} hosts: {{ result.output.discovered_hosts }}
+                                        {% elif object.scanner_type == 'cisco_switch' %}
+                                            Scanned {{ object.target_host }}
+                                        {% endif %}
+                                    {% else %}
+                                        No results
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                {% else %}
+                    <p class="text-muted">No scan results yet.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+{% endblock content %}
+
+{% block javascript %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const runScanForm = document.getElementById('run-scan-form');
+    const runScanButton = document.getElementById('run-scan-button');
+    
+    if (runScanForm) {
+        runScanForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            // غیرفعال کردن دکمه برای جلوگیری از کلیک مضاعف
+            runScanButton.disabled = true;
+            runScanButton.innerHTML = '<i class="mdi mdi-loading mdi-spin"></i> Running...';
+            
+            // ارسال درخواست AJAX
+            fetch(runScanForm.action, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': runScanForm.querySelector('[name=csrfmiddlewaretoken]').value,
+                    'Content-Type': 'application/json',
+                },
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'started') {
+                    showMessage('Scan started successfully!', 'success');
+                    // به روزرسانی صفحه پس از چند ثانیه
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 2000);
+                } else {
+                    showMessage('Error: ' + data.error, 'danger');
+                    runScanButton.disabled = false;
+                    runScanButton.innerHTML = '<i class="mdi mdi-play"></i> Run Scan';
+                }
+            })
+            .catch(error => {
+                showMessage('Network error: ' + error, 'danger');
+                runScanButton.disabled = false;
+                runScanButton.innerHTML = '<i class="mdi mdi-play"></i> Run Scan';
+            });
+        });
+    }
+    
+    function showMessage(message, type) {
+        // ایجاد المان برای نمایش پیام
+        const alertDiv = document.createElement('div');
+        alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+        alertDiv.innerHTML = `
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        `;
+        
+        // اضافه کردن پیام به بالای صفحه
+        const container = document.querySelector('.container');
+        container.insertBefore(alertDiv, container.firstChild);
+    }
+});
+</script>
+{% endblock javascript %}

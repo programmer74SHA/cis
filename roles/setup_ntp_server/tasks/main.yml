@@ -1,9 +1,0 @@
----
-
-- name: install chrony
-  import_tasks: install_chrony.yml
-  tags: [simple, cluster]
-  
-- name: Configure ntp server
-  import_tasks: setup_ntp.yml
-  tags: [simple, cluster]

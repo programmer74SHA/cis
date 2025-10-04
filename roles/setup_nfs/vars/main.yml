@@ -1,4 +1,0 @@
-NFS_SERVER_DIRECTORY: /var/nfs/siem
-NFS_CLIENT_MOUNT_POINT: /nfs/seim
-NFS_CONFIGURATION_PATH: /etc/exports
-nfs_allowed_clients: "{{ groups['DATA-NODES'] | map('extract', hostvars, ['ansible_host']) | list }}"

@@ -1,8 +1,0 @@
-- name: Install SF hosts type dependencies
-  block:
-    - name: Install SF hosts dependencies
-      apt:
-        name: ['filebeat', 'siem-kafka','logstash', 'docker-compose']
-        update_cache: yes
-        state: present
-  when: "'SF' in group_names"

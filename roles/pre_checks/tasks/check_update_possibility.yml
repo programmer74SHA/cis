@@ -1,8 +1,0 @@
-- name: Check elasticsearch is installed on update
-  block:
-    - name: Check elasticsearch cli
-      command:
-        cmd: /usr/share/elasticsearch/bin/elasticsearch --version
-  rescue:
-    - name: Fail if elasticsearch is not installed on update mode
-      meta: end_play

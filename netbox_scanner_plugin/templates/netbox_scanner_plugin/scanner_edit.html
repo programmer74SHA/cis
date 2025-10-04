@@ -1,0 +1,46 @@
+{% extends 'generic/object_edit.html' %}
+{% load form_helpers %}
+
+{% block form %}
+    {% render_field form.name %}
+    {% render_field form.scanner_type %}
+    {% render_field form.description %}
+    {% render_field form.enabled %}
+    
+    <div class="field-group">
+        <h4>Scanner Parameters</h4>
+        <div id="network-range-fields" style="display: none;">
+            {% render_field form.ip_range %}
+        </div>
+        <div id="cisco-switch-fields" style="display: none;">
+            {% render_field form.target_host %}
+            {% render_field form.snmp_community %}
+            {% render_field form.ssh_username %}
+            {% render_field form.ssh_password %}
+        </div>
+    </div>
+{% endblock %}
+
+{% block javascript %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const scannerType = document.getElementById('id_scanner_type');
+    const networkFields = document.getElementById('network-range-fields');
+    const ciscoFields = document.getElementById('cisco-switch-fields');
+    
+    function toggleFields() {
+        networkFields.style.display = 'none';
+        ciscoFields.style.display = 'none';
+        
+        if (scannerType.value === 'network_range') {
+            networkFields.style.display = 'block';
+        } else if (scannerType.value === 'cisco_switch') {
+            ciscoFields.style.display = 'block';
+        }
+    }
+    
+    scannerType.addEventListener('change', toggleFields);
+    toggleFields(); // Initial call
+});
+</script>
+{% endblock %}

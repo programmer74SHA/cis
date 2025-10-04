@@ -1,4 +1,0 @@
-- name: Check ALL hosts are reacheable before start the installation
-  gather_facts:
-    parallel: true
-  any_errors_fatal: true

@@ -1,8 +1,0 @@
-- name: install and setup lshell
-  import_tasks: setup_lshell.yml
-  tags: [cluster, simple]
-
-- name: install and setup lshell on new node
-  import_tasks: setup_lshell.yml
-  tags: new-node
-  when: is_new_lb | default(false) or install_needed | default(false)
