@@ -1,0 +1,65 @@
+{
+  "id": "system_audit-linux-db-default",
+  "name": "system_audit (linux-db-default)",
+  "namespace": "",
+  "policy_id": "linux-db-default",
+  "enabled": true,
+  "package": {
+    "name": "system_audit",
+    "version": ""
+  },
+  "inputs": [
+    {
+      "type": "audit/system",
+      "policy_template": "system_audit",
+      "enabled": true,
+      "streams": [
+        {
+          "enabled": true,
+          "data_stream": {
+            "type": "logs",
+            "dataset": "system_audit.package"
+          },
+          "vars": {
+            "period": {
+              "type": "text",
+              "value": "15m"
+            },
+            "state_period": {
+              "value": "12h",
+              "type": "text"
+            },
+            "pipeline": {
+              "type": "text"
+            },
+            "processors": {
+              "type": "yaml"
+            },
+            "tags": {
+              "value": [
+                "audit-system-package"
+              ],
+              "type": "text"
+            }
+          },
+          "compiled_stream": {
+            "type": "audit/system",
+            "datasets": [
+              "package"
+            ],
+            "period": "15m",
+            "state.period": "12h",
+            "tags": [
+              "audit-system-package"
+            ],
+            "processors": [
+              {
+                "add_host_metadata": null
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

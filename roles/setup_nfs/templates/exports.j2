@@ -1,0 +1,1 @@
+{{ NFS_SERVER_DIRECTORY }} {% for client in nfs_allowed_clients %}{{ client }}(rw,sync,no_subtree_check,no_root_squash){% if not loop.last %} {% endif %}{% endfor %}

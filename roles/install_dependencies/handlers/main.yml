@@ -1,0 +1,6 @@
+---
+# handlers file for install_dependencies
+- name: Restart docker
+  service:
+    name: docker
+    state: restarted

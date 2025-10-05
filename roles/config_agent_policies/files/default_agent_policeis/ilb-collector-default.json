@@ -1,0 +1,11 @@
+{
+    "id": "ilb-collector-default",
+    "name": "ilb-collector-default",
+    "namespace": "default",
+    "data_output_id": "logstash-agentless-output",
+    "monitoring_output_id": "logstash-agentless-output",
+    "monitoring_enabled": [
+      "metrics",
+      "logs"
+    ]
+  }

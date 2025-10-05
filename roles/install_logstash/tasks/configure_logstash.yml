@@ -1,0 +1,92 @@
+- name: "this block must be run on SF servers"
+  block:
+    - name: "Copy ca certificate files to logstash"
+      copy:
+        src: "{{ es_ssl_certificate_path }}/ca/ca.crt"
+        dest: "{{ logstash_certs_path }}/ca.crt"
+        owner: "1000"
+        group: "1000"
+        mode: "0660"
+        remote_src: yes
+
+    - name: Copy Logstash certificates
+      copy:
+        src: "{{ es_ssl_certificate_path }}/{{ inventory_hostname }}/"
+        dest: "{{ logstash_certs_path }}/"
+        owner: "1000"
+        group: "1000"
+        mode: "0660"
+        remote_src: yes
+
+    - name: Generate Elasticsearch API Key
+      uri:
+        url: "https://{{ ansible_default_ipv4.address }}:9200/_security/api_key"
+        method: POST
+        body: '{
+          "name": "logstash-docker-api-key",  
+          "role_descriptors": { 
+            "role-logstash-1": {
+              "cluster": ["manage_logstash_pipelines", "monitor"],
+              "indices": [
+                {
+                  "names": [".logstash*"],
+                  "privileges": ["read", "manage", "index", "delete", "create"]
+                }
+              ]
+            },
+            "role-logstash-2": {
+              "cluster": ["manage_index_templates", "manage_ingest_pipelines", "monitor", "cluster:admin/ilm/get", "cluster:admin/ilm/put", "cluster:monitor/xpack/watcher/watch/get", "cluster:admin/xpack/watcher/watch/put", "cluster:admin/xpack/watcher/watch/delete", "cluster:admin/xpack/monitoring/bulk"],
+              "indices": [
+                {
+                  "names": [".monitoring-*"],
+                  "privileges": ["all"]
+                },
+                {
+                  "names": ["metricbeat-*", "logs-*", "metrics-*"],
+                  "privileges": ["index", "create_index", "view_index_metadata", "indices:admin/aliases", "indices:admin/rollover"]
+                }
+              ]
+            }
+          },
+          "metadata": {
+            "application": "for_logstash_docker",
+            "environment": {
+              "trusted": true,
+              "tags": ["logstash", "docker"]
+            }
+          }
+          }'
+        body_format: json
+        user: "siem"
+        password: "Ch@ng3Th!sP@ssw0rd"
+        validate_certs: no
+        force_basic_auth: yes
+      register: api_key_response
+
+    - set_fact:
+        api_key: "{{ api_key_response.json.id }}:{{ api_key_response.json.api_key }}"
+
+    - name: Configure Logstash with API Key
+      template:
+        src: "templates/logstash-docker.yml.j2"
+        dest: "{{ logstash_config_path }}/logstash.yml"
+        owner: "1000"
+        group: "1000"
+        mode: "0660"
+      vars:
+        elasticsearch_api_key: "{{ api_key }}"
+
+    - name: Configure logstash jvm.options
+      template:
+        src: "templates/jvm.options.j2"
+        dest: "{{ logstash_config_path }}/jvm.options"
+        owner: "1000"
+        group: "1000"
+        mode: "0660"
+
+    - name: Generate Logstash Docker Compose file
+      template:
+        src: docker-compose-logstash.yml.j2
+        dest: "{{ logstash_compose_path }}"
+
+  when: "'SF' in group_names"

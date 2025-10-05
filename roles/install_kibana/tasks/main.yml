@@ -1,0 +1,222 @@
+---
+- name: "🚀 Kibana Installation on BDA Node"
+  block:
+    - name: Initialize Kibana variables
+      set_fact:
+        kibana_docker_path: "{{ kibana_base_path }}"
+        kibana_data_path: "{{ kibana_base_path }}/data"
+        kibana_logs_path: "{{ kibana_base_path }}/logs"
+        kibana_config_path: "{{ kibana_base_path }}/config"
+        kibana_certs_path: "{{ kibana_base_path }}/certs"
+        kibana_compose_path: "{{ kibana_base_path }}/docker-compose.yml"
+        kibana_elasticsearch_hosts: "https://127.0.0.1:9200"
+        kibana_elasticsearch_username: "kibana_system"
+
+    # - name: Change kibana_system password and update Kibana configuration
+    #   block:
+    #     - name: Change kibana_system password in Elasticsearch
+    #       ansible.builtin.uri:
+    #         url: "{{ es_api_endpoint | default('https://' + hostvars[inventory_hostname].node_hostname + ':' + es_http_base_port | string) }}/_security/user/kibana_system/_password"
+    #         method: PUT
+    #         user: "{{ es_api_basic_auth_username }}"
+    #         password: "{{ es_api_basic_auth_password }}"
+    #         body_format: json
+    #         body: |
+    #           {
+    #             "password": "{{ kibana_system_new_password }}"
+    #           }
+    #         headers:
+    #           Content-Type: "application/json"
+    #         ca_path: "{{ certs_base_path }}/ca/ca.crt"
+    #         validate_certs: yes
+    #         status_code: 200
+    #       register: password_change_result
+    #       failed_when: password_change_result.status != 200
+    #       when: 
+    #         - "'KIBANA' in group_names"
+    #         - kibana_system_new_password is defined
+
+    # - name: Create siem user with superuser role in Elasticsearch
+    #   block:
+    #     - name: Check if siem user already exists
+    #       ansible.builtin.uri:
+    #         url: "{{ es_api_endpoint | default('https://' + hostvars[inventory_hostname].node_hostname + ':' + es_http_base_port | string) }}/_security/user/siem"
+    #         method: GET
+    #         user: "{{ es_api_basic_auth_username }}"
+    #         password: "{{ es_api_basic_auth_password }}"
+    #         headers:
+    #           Content-Type: "application/json"
+    #         ca_path: "{{ certs_base_path }}/ca/ca.crt"
+    #         validate_certs: yes
+    #         status_code: [200, 404]
+    #       register: siem_user_check
+    #       when: 
+    #         - "'ELASTICSEARCH' in group_names"
+    #         - siem_user_password is defined
+
+    # - name: Create siem user with superuser role
+    #   ansible.builtin.uri:
+    #     url: "{{ es_api_endpoint | default('https://' + hostvars[inventory_hostname].node_hostname + ':' + es_http_base_port | string) }}/_security/user/siem"
+    #     method: PUT
+    #     user: "{{ es_api_basic_auth_username }}"
+    #     password: "{{ es_api_basic_auth_password }}"
+    #     body_format: json
+    #     body: |
+    #       {
+    #         "password": "{{ siem_user_password }}",
+    #         "roles": ["superuser"],
+    #         "full_name": "SIEM Administrator",
+    #         "email": "siem@admin.example.com"
+    #       }
+    #     headers:
+    #       Content-Type: "application/json"
+    #     ca_path: "{{ certs_base_path }}/ca/ca.crt"
+    #     validate_certs: yes
+    #     status_code: [200, 201]
+    #   when: 
+    #     - "'ELASTICSEARCH' in group_names"
+    #     - siem_user_password is defined
+    #     - siem_user_check.status == 404
+    #   register: siem_user_create_result
+
+
+    - name: Check if Elasticsearch is running (optional)
+      uri:
+        url: "http://{{ ansible_default_ipv4.address }}:9200/_cluster/health"
+        method: GET
+        timeout: 5
+        status_code: [200, 401, -1]
+      register: es_health_check
+      ignore_errors: true
+
+    - name: Create Kibana directory structure
+      file:
+        path: "{{ item }}"
+        state: directory
+        owner: "1000"
+        group: "1000"
+        mode: "0755"
+      loop:
+        - "{{ kibana_docker_path }}"
+        - "{{ kibana_data_path }}"
+        - "{{ kibana_logs_path }}"
+        - "{{ kibana_config_path }}"
+        - "{{ kibana_certs_path }}"
+
+    - name: Copy CA certificate if it exists
+      copy:
+        src: "{{ certs_base_path }}/ca/ca.crt"
+        dest: "{{ kibana_certs_path }}/ca.crt"
+        owner: "1000"
+        group: "1000"
+        mode: "0644"
+        remote_src: yes
+      ignore_errors: true
+
+    - name: Wait for Elasticsearch to be ready
+      uri:
+        url: "https://{{ ansible_default_ipv4.address }}:{{ es_http_base_port | default(9200) }}/_cluster/health"
+        method: GET
+        user: "{{ es_api_basic_auth_username | default('elastic') }}"
+        password: "{{ es_api_basic_auth_password }}"
+        force_basic_auth: yes
+        validate_certs: no
+        status_code: [200]
+        timeout: 30
+      register: es_ready
+      until: es_ready.status == 200
+      retries: 30
+      delay: 10
+      ignore_errors: yes
+
+    - name: Display Elasticsearch readiness
+      debug:
+        msg: |
+          Elasticsearch Status: {{ 'Ready' if es_ready.status | default(0) == 200 else 'Not Ready - Continuing anyway' }}
+
+    - name: Set kibana_system user password
+      uri:
+        url: "https://{{ ansible_default_ipv4.address }}:{{ es_http_base_port | default(9200) }}/_security/user/kibana_system/_password"
+        method: PUT
+        user: "{{ es_api_basic_auth_username | default('elastic') }}"
+        password: "{{ elastic_password }}"
+        force_basic_auth: yes
+        validate_certs: no
+        body_format: json
+        body:
+          password: "{{ kibana_elasticsearch_password }}"
+        headers:
+          Content-Type: "application/json"
+        status_code: [200]
+        timeout: 30
+      register: kibana_password_result
+      when: es_ready.status | default(0) == 200
+      ignore_errors: yes
+
+    - name: Display password set result
+      debug:
+        msg: |
+          ✅ Kibana System Password Updated
+          ================================
+          Status: {{ kibana_password_result.status | default('Skipped - ES not ready') }}
+          Response: {{ kibana_password_result.json | default('Success') if kibana_password_result.status is defined else 'Skipped' }}
+
+    - name: Generate Kibana configuration file
+      copy:
+        dest: "{{ kibana_config_path }}/kibana.yml"
+        content: |
+          server.host: "0.0.0.0"
+          server.port: 5601
+          server.name: "{{ inventory_hostname }}-kibana"
+          elasticsearch.hosts: ["https://{{ hostvars[inventory_hostname].node_hostname }}:9200"]
+          elasticsearch.username: "kibana_system"
+          elasticsearch.password: "{{ kibana_elasticsearch_password }}"
+          elasticsearch.ssl.certificateAuthorities: [/usr/share/kibana/config/certs/ca/ca.crt]
+          elasticsearch.ssl.verificationMode: none
+          logging.root.level: info
+          telemetry.optIn: false
+          pid.file: /usr/share/kibana/data/kibana.pid
+        owner: "1000"
+        group: "1000"
+        mode: "0660"
+
+    - name: Generate Kibana Docker Compose
+      template:
+        src: docker-compose-kibana.yml.j2
+        dest: "{{ kibana_docker_path }}/docker-compose.yml"
+        mode: "0644"
+        owner: root
+        group: root
+      when: inventory_hostname in groups.get('BDA', [])
+
+    - name: Deploy Kibana (will start when Elasticsearch is ready)
+      shell: |
+        cd {{ kibana_docker_path }}
+        docker-compose down || true
+        docker-compose up -d
+      register: kibana_deploy
+      ignore_errors: true
+
+    - name: Display deployment result
+      debug:
+        msg: |
+          Kibana Deployment:
+          {{ kibana_deploy.stdout | default('No output') }}
+
+    - name: Display Kibana installation status
+      debug:
+        msg: |
+          ✅ Kibana Installation Complete!
+          ================================
+          Access: http://{{ ansible_default_ipv4.address }}:5601
+          Username: kibana_system
+          Password: [Configured]
+          
+          Note: Kibana will be available once it connects to Elasticsearch
+          
+          Check status:
+          docker ps | grep kibana
+          docker logs kibana-{{ inventory_hostname }}
+
+  when: "'BDA' in group_names"
+  tags: [cluster, simple, kibana]

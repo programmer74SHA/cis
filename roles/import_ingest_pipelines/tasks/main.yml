@@ -1,0 +1,16 @@
+
+- name: import ingest pipelines
+  block:
+    - name: generate logstash api key
+      import_tasks: generate_logstash_api_key.yml
+
+    - name: import logstash pipelines
+      import_tasks: import_logstash_pipelines.yml
+      
+    - name: import general ingest pipelines
+      import_tasks: general_ingest_pipelines.yml
+    
+    - name: import default ingest pipelines
+      import_tasks: default_ingest_pipelines.yml
+  when: "'BDA' in group_names"
+  tags: [simple, cluster]

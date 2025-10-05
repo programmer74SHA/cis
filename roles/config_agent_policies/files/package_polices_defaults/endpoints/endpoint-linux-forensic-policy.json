@@ -1,0 +1,10 @@
+{
+  "id": "endpoint-linux-forensic-policy",
+  "name": "endpoint (linux-forensic-policy)",
+  "namespace": "",
+  "policy_id": "linux-forensic-policy",
+  "package": {
+    "name": "endpoint",
+    "version": ""
+  }
+}

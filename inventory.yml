@@ -1,0 +1,244 @@
+---
+all:
+  children:
+    # Hosts that will run containers
+    physical_hosts:
+      hosts:
+        host1:
+          ansible_host: 192.168.166.130
+          ansible_user: root
+          ansible_ssh_pass: 'password'
+          ansible_connection: ssh
+          node_hostname: host1.apk-siem.local
+          docker_network_name: 'elastic'
+          docker_network_subnet: '172.30.0.0/16'
+          elasticsearch_nodes:
+            # 1 Master node on host1
+            - name: master-host1
+              roles: ['master']
+              port_offset: 0
+              group_membership: ['MASTER', 'ELASTICSEARCH']
+              heap_size: '8g'
+            
+            # 1 Hot node on host1
+            - name: hot-host1
+              roles: ['data_hot', 'data_content']
+              port_offset: 1
+              group_membership: ['HOT', 'DATA_NODES', 'ELASTICSEARCH']
+              heap_size: '8g'
+            
+            # 1 ML node on host1
+            - name: ml-host1
+              roles: ['ml', 'transform']
+              port_offset: 2
+              group_membership: ['ML', 'ELASTICSEARCH']
+              heap_size: '8g'
+
+        host2:
+          ansible_host: 192.168.166.131
+          ansible_user: root
+          ansible_ssh_pass: 'password'
+          ansible_connection: ssh
+          node_hostname: host2.apk-siem.local
+          docker_network_name: 'elastic'
+          docker_network_subnet: '172.31.0.0/16'
+          elasticsearch_nodes:
+            # 1 Master node on host2
+            - name: master-host2
+              roles: ['master']
+              port_offset: 0
+              group_membership: ['MASTER', 'ELASTICSEARCH']
+              heap_size: '8g'
+            
+            # 1 Warm node on host2
+            - name: warm-host2
+              roles: ['data_warm']
+              port_offset: 1
+              group_membership: ['WARM', 'DATA_NODES', 'ELASTICSEARCH']
+              heap_size: '8g'
+            
+            # 1 SF/Ingest node on host2 (REQUIRED for LB)
+            - name: sf-host2
+              roles: ['ingest', 'transform']
+              port_offset: 2
+              group_membership: ['SF', 'ELASTICSEARCH']
+              heap_size: '8g'
+
+        host3:
+          ansible_host: 192.168.166.132
+          ansible_user: root
+          ansible_ssh_pass: 'password'
+          ansible_connection: ssh
+          node_hostname: host3.apk-siem.local
+          docker_network_name: 'elastic'
+          docker_network_subnet: '172.32.0.0/16'
+          elasticsearch_nodes:
+            # 1 Master node on host3
+            - name: master-host3
+              roles: ['master']
+              port_offset: 0
+              group_membership: ['MASTER', 'ELASTICSEARCH']
+              heap_size: '8g'
+            
+            # 1 Hot node on host3
+            - name: hot-host3
+              roles: ['data_hot', 'data_content']
+              port_offset: 1
+              group_membership: ['HOT', 'DATA_NODES', 'ELASTICSEARCH']
+              heap_size: '8g'
+            
+            # 1 Cold node on host3 (for tier diversity)
+            - name: cold-host3
+              roles: ['data_cold']
+              port_offset: 2
+              group_membership: ['COLD', 'DATA_NODES', 'ELASTICSEARCH']
+              heap_size: '8g'
+
+        # BDA node (Business Data Analytics - main management node)
+        bda:
+          ansible_host: 192.168.166.130
+          ansible_user: root
+          ansible_ssh_pass: 'password'
+          ansible_connection: ssh
+          ansible_ssh_common_args: '-o StrictHostKeyChecking=no'
+          node_hostname: bda.apk-siem.local
+          docker_network_name: 'elastic'
+          # docker_network_subnet: '172.33.0.0/16'
+          # Service configuration for BDA
+          install_kibana: true
+          install_elasticsearch: true
+          elasticsearch_nodes:
+            - name: bda-master
+              roles: ['remote_cluster_client']
+              port_offset: 0
+              group_membership: ['BDA', 'ELASTICSEARCH']
+              heap_size: '8g'
+
+        # Load balancer
+        lb1:
+          ansible_host: 192.168.166.134
+          ansible_user: root
+          ansible_ssh_pass: 'password'
+          ansible_connection: ssh
+          node_hostname: lb1.apk-siem.local
+          service_type: 'load_balancer'
+
+    # Logical groups (populated dynamically and statically)
+    BDA:
+      hosts:
+        bda: {}
+    
+    MASTER:
+      hosts:
+        host1: {}
+        host2: {}
+        host3: {}
+        bda: {}
+      
+    HOT:
+      hosts:
+        host1: {}
+        host3: {}
+      
+    WARM:
+      hosts:
+        host2: {}
+      
+    COLD:
+      hosts:
+        host3: {}
+      
+    FROZEN:
+      hosts: {}  # No frozen nodes in simplified setup
+      
+    ML:
+      hosts:
+        host1: {}
+        bda: {}
+      
+    COORDINATOR:
+      hosts: {}  # No dedicated coordinator in simplified setup
+    
+    # SF group - CRITICAL: Must have at least 2 hosts when LB group exists
+    SF:
+      hosts:
+        host2: {}  # Has sf-host2 node
+        bda: {}    # BDA also has ingest capability
+      
+    LB:
+      hosts:
+        lb1: {}
+    
+    ELASTICSEARCH:
+      hosts:
+        host1: {}
+        host2: {}
+        host3: {}
+        bda: {}
+      
+    DATA_NODES:
+      hosts:
+        host1: {}
+        host2: {}
+        host3: {}
+      
+    # Empty groups (required by pre-checks but not used in this deployment)
+    SCANNER:
+      hosts: {}
+      
+    NBA:
+      hosts: {}
+      
+    COLLECTOR:
+      hosts: {}
+
+  vars:
+    # Global Ansible configuration
+    ansible_ssh_common_args: '-o StrictHostKeyChecking=no'
+    top_level_domain: apk-siem.local
+    Lshell_user_password: 'YourSecureLshellPassword123!'
+    ntp_servers: 'pool.ntp.org'
+    siem_version: 7.8.0
+    nba_interface_name: ens192
+    
+    # ADDED: Base paths for all components
+    elasticsearch_base_path: /usr/share/siem/elasticsearch
+    certs_base_path: /usr/share/siem/certs
+    kibana_base_path: /usr/share/siem/kibana
+    
+    
+    # Elasticsearch cluster configuration
+    es_cluster_name: 'siem-cluster'
+    es_version: '8.18.2'
+    
+    # Port configuration - IMPORTANT: These are base ports, actual ports = base + offset
+    es_http_base_port: 9200
+    es_transport_base_port: 9300
+    
+    # SSL/TLS configuration
+    es_enable_http_ssl: host1.apk-siem.local
+    es_enable_transport_ssl: true
+    es_enable_security: true
+    es_ssl_verification_mode: 'certificate'
+    es_validate_certs: false
+    
+    # Authentication configuration
+    es_api_basic_auth_username: 'elastic'
+    es_api_basic_auth_password: 'YourVerySecureElasticsearchPassword123!'
+    
+    # Kibana configuration (for BDA node)
+    kibana_version: '8.18.2'
+    kibana_port: 5601
+    kibana_host: '0.0.0.0'
+    kibana_elasticsearch_hosts: 'https://bda.apk-siem.local:9200'
+    kibana_elasticsearch_username: 'kibana_system'
+    kibana_elasticsearch_password: 'NewKibanaSystemPassword123!'
+    siem_user_password: 'NewPassword'
+    # Performance settings
+    disable_swap_permanently: true
+    
+    # System configuration
+    net_core_rmem_max: 67108864
+    net_core_rmem_default: 67108864
+    disable_ipv6: 1
+    bash_history_size: 10000

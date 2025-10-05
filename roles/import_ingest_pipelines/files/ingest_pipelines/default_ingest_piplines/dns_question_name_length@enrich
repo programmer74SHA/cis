@@ -1,0 +1,19 @@
+{
+  "description": "dns.question.name length enrichment\nby Mosy\nv1.0.0",
+  "processors": [
+    {
+      "script": {
+        "source": "def parts = ctx.dns.question.name.length();\r\nctx.put(\"dns.question.name_length\", parts);",
+        "ignore_failure": true
+      }
+    },
+    {
+      "convert": {
+        "field": "dns.question.name_length",
+        "type": "long",
+        "ignore_missing": true,
+        "ignore_failure": true
+      }
+    }
+  ]
+}

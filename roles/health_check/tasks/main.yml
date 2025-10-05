@@ -1,0 +1,88 @@
+---
+- name: Elasticsearch health check
+  block:
+    - name: Ensure Elasticsearch service is running
+      shell: systemctl is-active elasticsearch
+      register: elasticsearch_status
+      failed_when: elasticsearch_status.rc != 0
+      changed_when: false
+      when:
+        - "'ELASTICSEARCH' in group_names"
+      ignore_errors: true
+      tags: [cluster , simple , new-node , health_check]
+
+    - name: Fail if Elasticsearch service is not running
+      fail:
+        msg: "Elasticsearch service is not running on {{ inventory_hostname }}."
+      when:
+        - "'ELASTICSEARCH' in group_names"
+        - elasticsearch_status.rc != 0
+  tags: [cluster , simple , new-node , health_check]
+
+- name: Kibana service health check
+  block:
+    - name: Ensure Kibana service is running
+      shell: systemctl is-active kibana
+      register: kibana_status
+      failed_when: kibana_status.rc != 0
+      changed_when: false
+      when:
+        - "'BDA' in group_names"
+      ignore_errors: true
+
+    - name: Fail if Kibana service is not running
+      fail:
+        msg: "Kibana service is not running on {{ inventory_hostname }}."
+      when:
+        - "'BDA' in group_names"
+        - kibana_status.rc != 0
+  tags: [cluster , simple , new-node , health_check]
+
+
+- name: nginx health check
+  block:
+    - name: Ensure Nginx service is running
+      shell: systemctl is-active nginx
+      register: nginx_status
+      failed_when: nginx_status.rc != 0
+      changed_when: false
+      when:
+        - "'SF' in group_names or 'LB' in group_names or 'BDA' in group_names"
+      ignore_errors: true
+
+    - name: Fail if Nginx service is not running
+      fail:
+        msg: "Nginx service is not running on {{ inventory_hostname }}."
+      when:
+        - "'SF' in group_names or 'LB' in group_names or 'BDA' in group_names"
+        - nginx_status.rc != 0
+  tags: [cluster , simple , new-node , health_check]
+
+
+
+- name: Logstash health check
+  block:
+    - name: Ensure Logstash service is running
+      shell: systemctl is-active logstash
+      register: logstash_status
+      failed_when: logstash_status.rc != 0
+      changed_when: false
+      when:
+        - "'SF' in group_names"
+      ignore_errors: true
+      
+
+    - name: Fail if Logstash service is not running
+      fail:
+        msg: "Logstash service is not running on {{ inventory_hostname }}."
+      when:
+        - "'SF' in group_names"
+        - logstash_status.rc != 0
+  tags: [cluster , simple , new-node , health_check]
+
+
+
+- name: Ensure Docker Compose services are healthy
+  include_tasks: docker_health_check.yml
+  when: "'BDA' in group_names"
+  tags: [cluster , simple , new-node , health_check]

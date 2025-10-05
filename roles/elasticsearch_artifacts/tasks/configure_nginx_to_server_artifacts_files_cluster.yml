@@ -1,0 +1,59 @@
+- name: install artifact
+  block:
+    - name: Remove artifacts for update
+      file:
+        path: "{{ artifact_server_datastore_path }}"
+        state: absent
+      tags: update
+
+    - name: "Create artifact datastore path"
+      file:
+        path: "{{ artifact_server_datastore_path }}"
+        state: directory
+    - name: "Copy files to artifact server datastore path "
+      copy:
+        src: "files/{{ artifact_server_datastore_source }}"
+        dest: "{{ artifact_server_datastore_path }}"
+        owner: "{{ nginx_service_username }}"
+        group: "{{ nginx_service_groupname }}"
+        mode: "0644"
+
+    - name: "Config Nginx webserver to serve Artifact files"
+      template:
+        src: "templates/{{ artifact_server_nginx_config_file_name }}"
+        dest: "{{ artifact_server_nginx_config_available_path }}"
+        owner: root
+        group: root
+        mode: "0644"
+      notify:
+        - Reload Nginx
+    - name: "Config Nginx webserver to Load balance fleet"
+      template:
+        src: "templates/{{ fleet_server_nginx_config_file_name }}"
+        dest: "{{ fleet_server_nginx_config_path }}"
+        owner: root
+        group: root
+        mode: "0644"
+      notify:
+        - Reload Nginx
+
+    - name: Enable nginx site
+      file:
+        src: "{{ artifact_server_nginx_config_available_path }}"
+        dest: "{{ artifact_server_nginx_config_enables_path }}"
+        state: link
+      notify:
+        - Reload Nginx
+
+    - name: Enable nginx module
+      service:
+        name: nginx
+        state: started
+        enabled: true
+      notify:
+        - Reload Nginx
+
+    - name: Load nginx configuration file
+      command: nginx -s reload
+
+  when: "'LB' in group_names"

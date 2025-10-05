@@ -1,0 +1,7 @@
+- name: "Install post-install packages on the all hosts"
+  block:
+    - name: "Install Post-install packages"
+      apt:
+        name: ['apt-transport-https', 'cryptsetup-initramfs', 'console-setup', 'acpid', 'iptraf-ng', 'texinfo','rsync', 'vim', 'locate', 'apt-rdepends', 'bash-completion', 'tcpdump', 'dnsutils', 'netcat-traditional', 'ufw', 'fail2ban', 'traceroute', 'iftop', 'htop', 'open-vm-tools', 'lsof', 'iotop', 'sysstat', 'tree', 'dbus', 'fio', 'parted', 'sysbench', 'tcpreplay', 'nmap', 'python3-pip']
+        update_cache: yes
+        state: present

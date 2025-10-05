@@ -1,0 +1,11 @@
+{
+    "id": "coordinator-nodes-policy",
+    "name": "coordinator-nodes-policy",
+    "namespace": "default",
+    "data_output_id": "fleet-default-output",
+    "monitoring_output_id": "fleet-default-output",
+    "monitoring_enabled": [
+      "metrics",
+      "logs"
+    ]
+  }

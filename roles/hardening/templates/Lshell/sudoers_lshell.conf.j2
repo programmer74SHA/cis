@@ -1,0 +1,3 @@
+{% for command in SUDO_COMMANDS %}
+{{ LSHELL_USER }} ALL=(ALL) NOPASSWD: /usr/bin/{{ command }}
+{% endfor %}

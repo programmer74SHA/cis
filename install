@@ -1,0 +1,288 @@
+#!/bin/bash
+set -e
+SIEM_VERSION=7.8.0
+INSTALLER_TMP_PATH="/var/siem/tmp/installer"
+LOCAL_REPOSITORY_DESTINATION_PATH="$INSTALLER_TMP_PATH/repository"
+INSTALLER_PATH=$(pwd)
+INVENTORY_FILE_NAME="inventory.yml"  # Changed from inventory.ini to inventory.yml
+SSH_KEY_PATH="$HOME/.ssh/id_rsa"
+LOCAL_REPOSITORY_ARCHIVE_FILE_PATH="roles/deploy_apt_repository/files"
+LOCAL_REPOSITORY_ARCHIVE_FILE_NAME="localrepository.tar.gz"
+LOCAL_REPOSITORY_DIRECTORY_NAME="source"
+
+function RedLinePrinter() {
+    echo -e "\033[31;40m $1 \033[0m"
+}
+
+function YellowLinePrinter() {
+    echo -e "\033[7;49;93m $1 \033[0m"
+}
+
+function GreenLinePrinter() {
+    echo -e "\033[32;40m $1 \033[0m"
+}
+
+function separator() {
+    echo -e '\033[36;40m ******************************************************************\033[0m'
+}
+
+function PStatus() {
+    if [ $? == 0 ]; then
+        echo -e '\033[32;40m ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ \033[0m'
+        echo -e "\033[32;40m $1 \033[0m"
+        echo -e '\033[32;40m ============================================ \033[0m'
+    else
+        echo -e '\033[31;40m ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ \033[0m'
+        echo -e "\033[31;40m !!!!!!!!______ $2 ______!!!!!!! \033[0m"
+        echo -e '\033[31;40m ============================================ \033[0m'
+        break
+    fi
+}
+
+if [[ $EUID -ne 0 ]]; then
+    RedLinePrinter "This installer must be run as root"
+    exit 1
+fi
+
+function Helper() {
+    GreenLinePrinter "Now you can configure your Ansible and START it to install SIEM V$SIEM_VERSION"
+}
+
+function START() {
+    GreenLinePrinter "START process ......"
+    separator
+}
+
+function CreateDirectory() {
+    DirectoryPath=$1
+    mkdir -p $DirectoryPath
+    PStatus "Directory was created" "Faild to create $DirectoryPath "
+    chmod 0755 $DirectoryPath
+    PStatus "Permision Configured" "Faild to set permision on  $DirectoryPath "
+}
+
+function COPY_REPOSITORY_ARCHIVE_FILE() {
+    YellowLinePrinter "Prepare Dependencies..."
+    CreateDirectory $INSTALLER_TMP_PATH
+    CreateDirectory $LOCAL_REPOSITORY_DESTINATION_PATH
+    cp ${INSTALLER_PATH}/${LOCAL_REPOSITORY_ARCHIVE_FILE_PATH}/${LOCAL_REPOSITORY_ARCHIVE_FILE_NAME} ${LOCAL_REPOSITORY_DESTINATION_PATH}
+    PStatus "Local repository archive copied" "Faild to copy repository file"
+    separator
+    YellowLinePrinter "Extract local Repository"
+    tar -xzf ${LOCAL_REPOSITORY_DESTINATION_PATH}/${LOCAL_REPOSITORY_ARCHIVE_FILE_NAME} -C ${LOCAL_REPOSITORY_DESTINATION_PATH}
+    PStatus "Local repository archive extracted" "Failed to extract local repository archive"
+    separator
+}
+
+function INSTALL_ANSIBLE_DEPENDENCIES() {
+    YellowLinePrinter "Install Dependencies"
+    echo "" >/etc/apt/sources.list
+    apt-get install -y ${LOCAL_REPOSITORY_DESTINATION_PATH}/${LOCAL_REPOSITORY_DIRECTORY_NAME}/*
+    PStatus "Dependencies Installed" "Failed to install Dependencies"
+    separator
+}
+
+function FINISH() {
+    GreenLinePrinter "FINISH process ..."
+    Helper
+}
+
+function COPY_SSH_ID() {
+    YellowLinePrinter "Copy ssh key to destination hosts"
+    
+    # Extract host information using ansible-inventory for YAML support
+    YellowLinePrinter "Extracting host information from inventory.yml..."
+    ansible-inventory -i "$INVENTORY_FILE_NAME" --list --yaml > /tmp/ansible_hosts.yml 2>/dev/null || {
+        RedLinePrinter "Failed to parse inventory.yml. Please check the file format."
+        exit 1
+    }
+    
+    # Extract hosts from the physical_hosts group using python
+    python3 -c "
+import yaml, sys
+try:
+    with open('/tmp/ansible_hosts.yml', 'r') as f:
+        inventory = yaml.safe_load(f)
+    
+    if 'all' in inventory and 'children' in inventory['all']:
+        if 'physical_hosts' in inventory['all']['children']:
+            hosts = inventory['all']['children']['physical_hosts'].get('hosts', {})
+            for host_name, host_vars in hosts.items():
+                ansible_host = host_vars.get('ansible_host', host_name)
+                ansible_user = host_vars.get('ansible_user', 'root')
+                ansible_pass = host_vars.get('ansible_ssh_pass', '')
+                ansible_conn = host_vars.get('ansible_connection', 'ssh')
+                
+                # Skip localhost and local connections
+                if ansible_host == 'localhost' or ansible_conn == 'local':
+                    continue
+                    
+                print(f'{host_name} ansible_host={ansible_host} ansible_user={ansible_user} ansible_ssh_pass={ansible_pass} ansible_connection={ansible_conn}')
+    else:
+        print('No physical_hosts group found in inventory', file=sys.stderr)
+        sys.exit(1)
+        
+except Exception as e:
+    print(f'Error parsing inventory: {e}', file=sys.stderr)
+    sys.exit(1)
+" > /tmp/ansible_hosts.txt
+    
+    if [ ! -s /tmp/ansible_hosts.txt ]; then
+        RedLinePrinter "No hosts found in physical_hosts group or failed to extract host information"
+        exit 1
+    fi
+    
+    while IFS= read -r line; do
+        if [[ -z "$line" || $line == \#* ]]; then
+            continue
+        fi
+        
+        HOST=$(echo $line | grep -oP 'ansible_host=\K\S+')
+        USERNAME=$(echo $line | grep -oP 'ansible_user=\K\S+')
+        PASSWORD=$(echo $line | grep -oP 'ansible_ssh_pass=\K\S+' | tr -d \'\")
+        CONNECTION=$(echo $line | grep -oP 'ansible_connection=\K\S+')
+        
+        if [[ -z "$HOST" || $HOST == "localhost" ]]; then
+            continue
+        fi
+        
+        if [[ "$CONNECTION" == "local" ]]; then
+            continue
+        fi
+        
+        YellowLinePrinter "Setting up SSH key for $USERNAME@$HOST"
+        sshpass -p "$PASSWORD" ssh-copy-id -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa.pub "$USERNAME@$HOST"
+        SetupPythonModule $USERNAME $HOST &
+    done < /tmp/ansible_hosts.txt
+    
+    wait
+    
+    # Cleanup temporary files
+    rm -f /tmp/ansible_hosts.yml /tmp/ansible_hosts.txt
+    separator
+}
+
+function SetupPythonModule() {
+    ssh $1@$2 mkdir -p ${LOCAL_REPOSITORY_DESTINATION_PATH} < /dev/null | tee -a /var/log/$2.log
+    scp ${INSTALLER_PATH}/${LOCAL_REPOSITORY_ARCHIVE_FILE_PATH}/${LOCAL_REPOSITORY_ARCHIVE_FILE_NAME} $1@$2:${LOCAL_REPOSITORY_DESTINATION_PATH} < /dev/null | tee -a /var/log/$2.log
+    ssh $1@$2 rm -rf /etc/apt/sources.list < /dev/null | tee -a /var/log/$2.log
+    ssh $1@$2 touch /etc/apt/sources.list < /dev/null | tee -a /var/log/$2.log
+    ssh $1@$2 tar -xzf ${LOCAL_REPOSITORY_DESTINATION_PATH}/${LOCAL_REPOSITORY_ARCHIVE_FILE_NAME} -C ${LOCAL_REPOSITORY_DESTINATION_PATH} < /dev/null | tee -a /var/log/$2.log
+    ssh $1@$2 apt-get install -y ${LOCAL_REPOSITORY_DESTINATION_PATH}/source/* < /dev/null | tee -a /var/log/$2.log
+}
+
+function CREATE_SSH_KEY() {
+    YellowLinePrinter "Creating SSH key"
+    : "${SSH_KEY_PATH:=$HOME/.ssh/id_rsa}"
+    rm -f "$SSH_KEY_PATH" "$SSH_KEY_PATH.pub"
+    ssh-keygen -t rsa -b 4096 -f "$SSH_KEY_PATH" -N ''
+    separator
+}
+
+function CheckHostsAvailability() {
+    YellowLinePrinter "Checking hosts availability..."
+    local all_hosts_available=true
+
+    # Check if inventory file exists
+    if [ ! -f "$INVENTORY_FILE_NAME" ]; then
+        RedLinePrinter "Inventory file $INVENTORY_FILE_NAME not found!"
+        exit 1
+    fi
+
+    # Install required dependencies for YAML parsing
+    YellowLinePrinter "Installing required dependencies for YAML parsing..."
+    apt-get update -qq
+    apt-get install -y python3 python3-yaml ansible sshpass > /dev/null 2>&1
+    
+    # Extract host information using ansible-inventory
+    YellowLinePrinter "Extracting host information from $INVENTORY_FILE_NAME..."
+    ansible-inventory -i "$INVENTORY_FILE_NAME" --list --yaml > /tmp/ansible_hosts.yml 2>/dev/null || {
+        RedLinePrinter "Failed to parse $INVENTORY_FILE_NAME. Please check the file format."
+        exit 1
+    }
+    
+    # Extract hosts from the physical_hosts group using python
+    python3 -c "
+import yaml, sys
+try:
+    with open('/tmp/ansible_hosts.yml', 'r') as f:
+        inventory = yaml.safe_load(f)
+    
+    if 'all' in inventory and 'children' in inventory['all']:
+        if 'physical_hosts' in inventory['all']['children']:
+            hosts = inventory['all']['children']['physical_hosts'].get('hosts', {})
+            for host_name, host_vars in hosts.items():
+                ansible_host = host_vars.get('ansible_host', host_name)
+                ansible_user = host_vars.get('ansible_user', 'root')
+                ansible_pass = host_vars.get('ansible_ssh_pass', '')
+                ansible_conn = host_vars.get('ansible_connection', 'ssh')
+                
+                # Skip localhost and local connections
+                if ansible_host == 'localhost' or ansible_conn == 'local':
+                    continue
+                    
+                print(f'{host_name} ansible_host={ansible_host} ansible_user={ansible_user} ansible_ssh_pass={ansible_pass} ansible_connection={ansible_conn}')
+    else:
+        print('No physical_hosts group found in inventory', file=sys.stderr)
+        sys.exit(1)
+        
+except Exception as e:
+    print(f'Error parsing inventory: {e}', file=sys.stderr)
+    sys.exit(1)
+" > /tmp/ansible_hosts.txt
+
+    if [ ! -s /tmp/ansible_hosts.txt ]; then
+        RedLinePrinter "No hosts found in physical_hosts group or failed to extract host information"
+        exit 1
+    fi
+
+    while IFS= read -r line; do
+        if [[ -z "$line" || $line == \#* ]]; then
+            continue
+        fi
+        
+        HOST=$(echo "$line" | grep -oP 'ansible_host=\K\S+')
+        USER=$(echo "$line" | grep -oP 'ansible_user=\K\S+')
+        PASS=$(echo "$line" | grep -oP 'ansible_ssh_pass=\K\S+' | tr -d \'\")
+        CONNECTION=$(echo "$line" | grep -oP 'ansible_connection=\K\S+')
+
+        if [[ -z "$HOST" || "$HOST" == "localhost" ]]; then
+            continue
+        fi
+
+        if [[ "$CONNECTION" == "local" ]]; then
+            continue
+        fi
+
+        YellowLinePrinter "Checking connectivity to $HOST as $USER..."
+        if sshpass -p "$PASS" ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no "$USER@$HOST" echo ok >/dev/null 2>&1; then
+            GreenLinePrinter "$HOST is reachable."
+        else
+            RedLinePrinter "ERROR: $HOST is unreachable."
+            all_hosts_available=false
+        fi
+    done < /tmp/ansible_hosts.txt
+
+    # Cleanup temporary files
+    rm -f /tmp/ansible_hosts.yml /tmp/ansible_hosts.txt
+
+    if ! $all_hosts_available; then
+        RedLinePrinter "One or more hosts are unreachable. Exiting."
+        exit 1
+    else
+        GreenLinePrinter "All hosts are reachable. Proceeding..."
+    fi
+    separator
+}
+
+function MAIN() {
+    START
+    COPY_REPOSITORY_ARCHIVE_FILE
+    INSTALL_ANSIBLE_DEPENDENCIES
+    CheckHostsAvailability
+    CREATE_SSH_KEY
+    COPY_SSH_ID
+    FINISH
+}
+
+MAIN

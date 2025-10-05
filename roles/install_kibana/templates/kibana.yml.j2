@@ -1,0 +1,61 @@
+# roles/install_kibana/templates/kibana.yml.j2
+# Kibana Configuration
+# Generated: {{ ansible_date_time.iso8601 }}
+
+# Server
+server.host: "0.0.0.0"
+server.port: 5601
+server.name: "{{ inventory_hostname }}-kibana"
+
+# SSL Configuration
+server.ssl.enabled: true
+server.ssl.key: /usr/share/kibana/config/certs/kibana.key
+server.ssl.certificate: /usr/share/kibana/config/certs/kibana.crt
+
+# Elasticsearch
+elasticsearch.hosts: ["{{ kibana_elasticsearch_hosts }}"]
+elasticsearch.ssl.certificateAuthorities: [/usr/share/kibana/config/certs/ca.crt]
+elasticsearch.ssl.verificationMode: certificate
+
+{% if es_service_token is defined %}
+# Service account token authentication
+elasticsearch.serviceAccountToken: {{ es_service_token }}
+{% else %}
+# Username/password authentication
+elasticsearch.username: "{{ kibana_elasticsearch_username }}"
+elasticsearch.password: "{{ kibana_elasticsearch_password }}"
+{% endif %}
+
+# Logging
+logging:
+  root:
+    level: info
+    appenders:
+      - kibana-log
+  appenders:
+    kibana-log:
+      type: rolling-file
+      fileName: /usr/share/kibana/logs/kibana.log
+      policy:
+        type: time-interval
+        interval: 24h
+      layout:
+        type: json
+
+# Security
+xpack.encryptedSavedObjects.encryptionKey: 7946e75bc0cad7f510d933d288ead678
+xpack.reporting.encryptionKey: bd7bc65d6208bb27cb52b035a25d0e72
+xpack.security.encryptionKey: 2f80b83bdec5bdab7d5e9c09f67c1141
+
+# Performance
+elasticsearch.requestTimeout: 120000
+
+# Telemetry
+telemetry.allowChangingOptInStatus: false
+telemetry.optIn: false
+
+# Monitoring
+monitoring.ui.ccs.enabled: false
+
+# Process ID
+pid.file: /usr/share/kibana/data/kibana.pid

@@ -1,0 +1,10 @@
+{
+  "id": "endpoint-windows-exchange-default",
+  "name": "endpoint (windows-exchange-default)",
+  "namespace": "",
+  "policy_id": "windows-exchange-default",
+  "package": {
+    "name": "endpoint",
+    "version": ""
+  }
+}

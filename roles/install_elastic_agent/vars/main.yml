@@ -1,0 +1,6 @@
+---
+elastic_agent_download_dir: "/var/siem/tmp"
+elastic_agent_port: "8082"
+elastic_version: "8.18.2"
+elastic_agent_download_file_name: "elastic-agent-{{ elastic_version }}-linux-x86_64.tar.gz"
+elastic_agent_download_file_url: "downloads/beats/elastic-agent/{{ elastic_agent_download_file_name }}"

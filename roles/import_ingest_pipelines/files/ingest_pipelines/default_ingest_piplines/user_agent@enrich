@@ -1,0 +1,13 @@
+{
+  "description": "user_agent enrichment\nby Mosy\nv1.0.0",
+  "processors": [
+    {
+      "user_agent": {
+        "field": "user_agent.original",
+        "extract_device_type": true,
+        "ignore_missing": true,
+        "ignore_failure": true
+      }
+    }
+  ]
+}

@@ -1,0 +1,33 @@
+---
+# roles/install_kibana/defaults/main.yml
+
+# Kibana version
+kibana_version: "8.18.2"
+
+# Kibana server configuration
+kibana_port: 5601
+kibana_host: "0.0.0.0"
+
+# Elasticsearch connection
+# kibana_elasticsearch_hosts: "https://127.0.0.1:9200"
+# kibana_elasticsearch_username: "elastic"
+# kibana_elasticsearch_password: "NewKibanaSystemPassword123!"
+
+# Feature flags
+setup_fleet: false
+enable_apm: false
+enable_ml: true
+enable_monitoring: true
+enable_siem: true
+enable_maps: true
+enable_alerting: true
+enable_reporting: true
+
+# Security settings
+kibana_cors_enabled: false
+
+# Performance settings
+kibana_node_options: "--max-old-space-size=2048"
+
+# SSL verification
+es_validate_certs: false

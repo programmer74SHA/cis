@@ -1,0 +1,12 @@
+{
+  "id": "ded-important-integrations",
+  "name": "ded (important-integrations)",
+  "namespace": "",
+  "policy_id": "important-integrations",
+  "enabled": true,
+  "package": {
+    "name": "ded",
+    "version": ""
+  },
+  "inputs": []
+}

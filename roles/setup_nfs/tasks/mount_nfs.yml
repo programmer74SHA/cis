@@ -1,0 +1,16 @@
+- name: Mount NFS share
+  block:
+    - name: Create mount path directory
+      file:
+        path: "{{ NFS_CLIENT_MOUNT_POINT }}"
+        state: directory
+
+    - name: Mount NFS share
+      mount:
+        src: "{{ hostvars[groups['BDA'][0]]['ansible_default_ipv4']['address'] }}:{{ NFS_SERVER_DIRECTORY }}"
+        path:  "{{ NFS_CLIENT_MOUNT_POINT }}"
+        state: mounted
+        fstype: nfs
+        opts:  rw
+        
+  when: "'DATA-NODES' in group_names"

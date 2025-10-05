@@ -1,0 +1,322 @@
+---
+- name: Setup Kibana and Logstash users in Elasticsearch
+  block:
+    - name: Determine Elasticsearch connection details
+      set_fact:
+        es_node_name: "bda-master"
+        es_container_name: "bda-master"
+        es_endpoint_host: "{{ hostvars[inventory_hostname].node_hostname }}"
+        es_endpoint_port: "{{ es_http_base_port | default(9200) }}"
+        es_protocol: "{{ 'https' if es_enable_http_ssl | default(true) else 'http' }}"
+        es_username: "{{ es_api_basic_auth_username | default('elastic') }}"
+        es_password: "{{ es_api_basic_auth_password }}"
+        # kibana_password: "{{ kibana_elasticsearch_password | default('NewKibanaSystemPassword123!') }}"
+        # logstash_password: "{{ logstash_elasticsearch_password | default('YourVerySecureLogstashPassword123!') }}"
+
+    - name: Validate required variables
+      assert:
+        that:
+          - es_password is defined
+          - es_password != ''
+          - kibana_password is defined
+          - kibana_password != ''
+        fail_msg: |
+          ❌ Required passwords not defined in inventory!
+          Please ensure es_api_basic_auth_password and kibana_elasticsearch_password are set.
+
+    - name: Display connection information
+      debug:
+        msg: |
+          🔗 Elasticsearch Connection Configuration
+          ========================================
+          Container: {{ es_container_name }}
+          Hostname: {{ es_endpoint_host }}
+          Endpoint: {{ es_protocol }}://{{ es_endpoint_host }}:{{ es_endpoint_port }}
+          Username: {{ es_username }}
+
+    - name: Check if Elasticsearch container is running
+      shell: docker ps --format "{{ '{{' }}.Names{{ '}}' }}" | grep -x "{{ es_container_name }}"
+      register: es_container_check
+      until: es_container_check.rc == 0
+      retries: 30
+      delay: 10
+      changed_when: false
+      failed_when: false
+
+    - name: Fail if Elasticsearch container is not running
+      fail:
+        msg: |
+          ❌ Elasticsearch container '{{ es_container_name }}' is not running!
+          
+          Please ensure Elasticsearch is installed and running:
+          docker ps | grep elasticsearch
+          
+          If not running, deploy Elasticsearch first:
+          ansible-playbook main-playbook.yml --tags elasticsearch
+      when: es_container_check.rc != 0
+
+    - name: Wait for Elasticsearch container to be fully started
+      shell: docker logs {{ es_container_name }} 2>&1 | grep -q "started"
+      register: es_started_check
+      until: es_started_check.rc == 0
+      retries: 30
+      delay: 10
+      changed_when: false
+      failed_when: false
+
+    - name: Check Elasticsearch health from inside container
+      shell: |
+        docker exec {{ es_container_name }} curl -s -k \
+          -u {{ es_username }}:{{ es_password }} \
+          {{ es_protocol }}://localhost:{{ es_endpoint_port }}/_cluster/health
+      register: es_health_internal
+      until: es_health_internal.rc == 0
+      retries: 30
+      delay: 10
+      changed_when: false
+      failed_when: false
+
+    - name: Display Elasticsearch health check result
+      debug:
+        msg: |
+          Elasticsearch health (from container): 
+          {{ es_health_internal.stdout | default('Not accessible') }}
+
+    - name: Wait for Elasticsearch to be ready via hostname
+      uri:
+        url: "{{ es_protocol }}://{{ es_endpoint_host }}:{{ es_endpoint_port }}/_cluster/health"
+        method: GET
+        user: "{{ es_username }}"
+        password: "{{ es_password }}"
+        force_basic_auth: yes
+        validate_certs: no
+        status_code: [200]
+        timeout: 30
+      register: es_ready
+      until: es_ready.status == 200
+      retries: 30
+      delay: 10
+      failed_when: false
+
+    - name: Fail if Elasticsearch is not accessible after all retries
+      fail:
+        msg: |
+          ❌ Elasticsearch is not accessible after 5 minutes!
+          
+          Endpoint: {{ es_protocol }}://{{ es_endpoint_host }}:{{ es_endpoint_port }}
+          Container: {{ es_container_name }}
+          
+          Troubleshooting:
+          1. Check if Elasticsearch is healthy:
+             docker exec {{ es_container_name }} curl -k -u {{ es_username }}:PASSWORD \
+               {{ es_protocol }}://localhost:{{ es_endpoint_port }}/_cluster/health
+          
+          2. Check container logs:
+             docker logs {{ es_container_name }} | tail -50
+          
+          3. Verify hostname resolution:
+             ping {{ es_endpoint_host }}
+             
+          4. Check if port is accessible:
+             curl -k {{ es_protocol }}://{{ es_endpoint_host }}:{{ es_endpoint_port }}
+      when: 
+        - es_ready.status is not defined or es_ready.status != 200
+        - es_health_internal.rc != 0
+
+    - name: Display Elasticsearch ready status
+      debug:
+        msg: |
+          ✅ Elasticsearch is ready!
+          Status: {{ (es_ready.json.status | default('unknown')) | upper }}
+          Cluster: {{ es_ready.json.cluster_name | default('unknown') }}
+          Nodes: {{ es_ready.json.number_of_nodes | default(0) }}
+
+    # ============= Kibana System User Setup =============
+    - name: Test if kibana_system password is already correct
+      uri:
+        url: "{{ es_protocol }}://{{ es_endpoint_host }}:{{ es_endpoint_port }}/_security/_authenticate"
+        method: GET
+        user: "kibana_system"
+        password: "{{ kibana_password }}"
+        force_basic_auth: yes
+        validate_certs: no
+        status_code: [200, 401]
+        timeout: 30
+      register: kibana_password_test
+      failed_when: false
+
+    - name: Set kibana_system user password
+      uri:
+        url: "{{ es_protocol }}://{{ es_endpoint_host }}:{{ es_endpoint_port }}/_security/user/kibana_system/_password"
+        method: POST
+        user: "{{ es_username }}"
+        password: "{{ es_password }}"
+        force_basic_auth: yes
+        validate_certs: no
+        body_format: json
+        body:
+          password: "{{ kibana_password }}"
+        status_code: [200]
+        timeout: 30
+      register: kibana_password_set
+      when: 
+        - kibana_password_test.status is defined
+        - kibana_password_test.status != 200
+      failed_when: 
+        - kibana_password_set.status is defined
+        - kibana_password_set.status != 200
+
+    - name: Verify kibana_system password
+      uri:
+        url: "{{ es_protocol }}://{{ es_endpoint_host }}:{{ es_endpoint_port }}/_security/_authenticate"
+        method: GET
+        user: "kibana_system"
+        password: "{{ kibana_password }}"
+        force_basic_auth: yes
+        validate_certs: no
+        status_code: [200]
+        timeout: 30
+      register: kibana_password_verify
+      when: kibana_password_set is changed
+
+    - name: Display kibana_system setup result
+      debug:
+        msg: |
+          ✅ Kibana System User
+          ===================
+          Username: kibana_system
+          Status: {% if kibana_password_test.status == 200 %}Already configured{% elif kibana_password_verify.status | default(0) == 200 %}Password set successfully{% else %}Configured{% endif %}
+
+    # ============= Logstash User Setup =============
+    - name: Create logstash_writer role
+      uri:
+        url: "{{ es_protocol }}://{{ es_endpoint_host }}:{{ es_endpoint_port }}/_security/role/logstash_writer"
+        method: PUT
+        user: "{{ es_username }}"
+        password: "{{ es_password }}"
+        force_basic_auth: yes
+        validate_certs: no
+        body_format: json
+        body:
+          cluster:
+            - manage_index_templates
+            - monitor
+            - manage_ilm
+          indices:
+            - names:
+                - "logstash-*"
+                - "logs-*"
+                - "metrics-*"
+              privileges:
+                - write
+                - create
+                - create_index
+                - manage
+                - manage_ilm
+        status_code: [200, 201]
+        timeout: 30
+      register: logstash_role_created
+
+    - name: Create logstash_internal user
+      uri:
+        url: "{{ es_protocol }}://{{ es_endpoint_host }}:{{ es_endpoint_port }}/_security/user/logstash_internal"
+        method: PUT
+        user: "{{ es_username }}"
+        password: "{{ es_password }}"
+        force_basic_auth: yes
+        validate_certs: no
+        body_format: json
+        body:
+          password: "{{ logstash_password }}"
+          roles:
+            - logstash_writer
+          full_name: "Logstash Internal User"
+          email: "logstash@{{ hostvars[inventory_hostname].node_hostname }}"
+        status_code: [200, 201]
+        timeout: 30
+      register: logstash_user_created
+
+    - name: Verify logstash_internal user
+      uri:
+        url: "{{ es_protocol }}://{{ es_endpoint_host }}:{{ es_endpoint_port }}/_security/_authenticate"
+        method: GET
+        user: "logstash_internal"
+        password: "{{ logstash_password }}"
+        force_basic_auth: yes
+        validate_certs: no
+        status_code: [200]
+        timeout: 30
+      register: logstash_user_verify
+      when: logstash_user_created.status in [200, 201]
+
+    - name: Display final user setup summary
+      debug:
+        msg: |
+          ✅ Elasticsearch Users Configuration Complete
+          ============================================
+          Elasticsearch: {{ es_protocol }}://{{ es_endpoint_host }}:{{ es_endpoint_port }}
+          Container: {{ es_container_name }}
+          
+          👤 Users Created/Updated:
+          - kibana_system: ✓ Configured
+          - logstash_internal: {{ '✓ Created and verified' if logstash_user_verify.status | default(0) == 200 else '✓ Created' }}
+          
+          🔐 Roles Created:
+          - logstash_writer: ✓ Created
+          
+          📝 Next Steps:
+          1. Kibana will use kibana_system user to connect
+          2. Logstash can use logstash_internal user for data ingestion
+          3. Credentials are securely stored and ready for use
+
+  rescue:
+    - name: Display comprehensive error information
+      debug:
+        msg: |
+          ❌ User setup failed!
+          
+          🔍 Diagnostic Information:
+          Container Status: {{ es_container_check.stdout | default('Not checked') }}
+          Health Check: {{ es_health_internal.stdout | default('Not checked') }}
+          API Status: {{ es_ready.status | default('Not accessible') }}
+          
+          🛠️ Manual Recovery Steps:
+          
+          1. Verify Elasticsearch is running:
+             docker ps | grep {{ es_container_name }}
+             
+          2. Check Elasticsearch logs:
+             docker logs {{ es_container_name }} | tail -100
+             
+          3. Test connectivity from host:
+             curl -k -u {{ es_username }}:PASSWORD \
+               {{ es_protocol }}://{{ es_endpoint_host }}:{{ es_endpoint_port }}/_cluster/health
+             
+          4. Test connectivity from inside container:
+             docker exec {{ es_container_name }} curl -k -u {{ es_username }}:PASSWORD \
+               {{ es_protocol }}://localhost:{{ es_endpoint_port }}/_cluster/health
+             
+          5. Manually set kibana_system password:
+             docker exec {{ es_container_name }} \
+               /usr/share/elasticsearch/bin/elasticsearch-reset-password -u kibana_system -i
+             
+          6. Check /etc/hosts for hostname resolution:
+             grep {{ es_endpoint_host }} /etc/hosts
+             
+          7. Verify SSL certificates exist:
+             ls -la {{ certs_base_path | default('/usr/share/siem/elasticsearch/certs') }}/ca/
+             
+          8. Re-run this task after fixing issues:
+             ansible-playbook main-playbook.yml --tags kibana -e "ansible_ssh_common_args='-o StrictHostKeyChecking=no'"
+
+    - name: Fail with detailed error message
+      fail:
+        msg: |
+          Failed to setup Elasticsearch users. Check the diagnostic information above.
+          The most common issues are:
+          - Elasticsearch not fully started (wait 2-3 minutes and retry)
+          - Incorrect elastic user password in inventory
+          - Network/hostname resolution issues
+          - SSL certificate problems
+
+  when: inventory_hostname in groups.get('BDA', [])

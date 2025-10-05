@@ -1,0 +1,27 @@
+---
+elk_user : "siem"
+elk_password: "Ch@ng3Th!sP@ssw0rd"
+kibana_address: "https://{{ hostvars[groups['BDA'][0]]['ansible_default_ipv4']['address'] }}:5601"
+elastic_address: "https://{{ hostvars[groups['BDA'][0]]['ansible_default_ipv4']['address'] }}:9200"
+
+
+
+elastic_cert_dir: "/etc/elasticsearch/certs"
+logstash_cert_name: "logstash"
+logstash_cert_output: "{{ elastic_cert_dir }}/{{ logstash_cert_name }}.zip"
+logstash_cert_pem_dir: "{{ elastic_cert_dir }}/{{ logstash_cert_name }}"
+logstash_cert_src_crt: "{{ logstash_cert_pem_dir }}/{{ logstash_cert_name }}/{{ logstash_cert_name }}.crt"
+logstash_cert_src_key: "{{ logstash_cert_pem_dir }}/{{ logstash_cert_name }}/{{ logstash_cert_name }}.key"
+
+
+### Client certificate
+client_cert_name: "client"
+client_cert_output: "{{ elastic_cert_dir }}/{{ client_cert_name }}.zip"
+client_cert_pem_dir: "{{ elastic_cert_dir }}/{{ client_cert_name }}"
+client_cert_src_crt: "{{ client_cert_pem_dir }}/{{ client_cert_name }}/{{ client_cert_name }}.crt"
+client_cert_src_key: "{{ client_cert_pem_dir }}/{{ client_cert_name }}/{{ client_cert_name }}.key"
+
+
+### logstash paths on SF
+logstash_home_directory_path: "/etc/logstash"
+logstash_certs_directory_path: "{{ logstash_home_directory_path }}/certs"

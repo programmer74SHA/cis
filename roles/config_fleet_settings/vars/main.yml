@@ -1,0 +1,9 @@
+---
+elk_user : "siem"
+elk_password: "Ch@ng3Th!sP@ssw0rd"
+kibana_address: "https://{{ hostvars[groups['BDA'][0]]['ansible_default_ipv4']['address'] }}:5601"
+
+artifact_repository_url_path: "/downloads/"
+artifact_repository_port: "8082"
+artifact_repository_ip: "{% if groups['LB'] | length > 0 %}{{ hostvars[groups['LB'][0]]['ansible_default_ipv4']['address'] }}{% else %}{{ hostvars[groups['SF'][0]]['ansible_default_ipv4']['address'] }}{% endif %}"
+artifact_repository_url : "http://{{ artifact_repository_ip }}:{{ artifact_repository_port }}{{ artifact_repository_url_path }}"

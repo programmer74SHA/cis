@@ -1,0 +1,25 @@
+- name: Ensure role is run only on ELASTICSEARCH hosts
+  set_fact:
+    is_elasticsearch: "'ELASTICSEARCH' in group_names"
+  tags: new-node
+
+- name: Check if Elasticsearch is installed
+  block:
+    - name: Check if Elasticsearch binary is present
+      stat:
+        path: /usr/share/elasticsearch/bin/elasticsearch
+      register: elasticsearch_binary
+      when: is_elasticsearch
+
+    - name: Check if Elasticsearch service configuration file exists
+      stat:
+        path: /etc/systemd/system/elasticsearch.service
+      register: elasticsearch_service_config
+      when: is_elasticsearch
+
+    - name: Set fact for nodes where Elasticsearch is not installed
+      set_fact:
+        install_needed: "{{ not (elasticsearch_binary.stat.exists or
+                                elasticsearch_service_config.stat.exists) }}"
+      when: is_elasticsearch
+  tags: new-node

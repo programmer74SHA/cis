@@ -1,0 +1,31 @@
+- name: Install Logstash Docker just on SF hosts
+  block:
+    - name: Create Logstash Docker directories
+      file:
+        path: "{{ item }}"
+        state: directory
+        owner: "1000"
+        group: "1000"
+        mode: "0755"
+      with_items:
+        - "{{ logstash_docker_path }}"
+        - "{{ logstash_data_path }}"
+        - "{{ logstash_logs_path }}"
+        - "{{ logstash_config_path }}"
+        - "{{ logstash_pipeline_path }}"
+        - "{{ logstash_certs_path }}"
+
+    - name: Copy Logstash Docker image
+      synchronize:
+        src: files/logstash-{{ logstash_version }}-docker.tar.gz
+        dest: /var/cache/siem/logstash-{{ logstash_version }}-docker.tar.gz
+
+    - name: Load Logstash Docker image
+      command: docker load -i /var/cache/siem/logstash-{{ logstash_version }}-docker.tar.gz
+
+    - name: Remove temporary Docker image file
+      file:
+        path: /var/cache/siem/logstash-{{ logstash_version }}-docker.tar.gz
+        state: absent
+
+  when: "'SF' in group_names or 'COLLECTOR' in group_names"

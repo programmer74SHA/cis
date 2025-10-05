@@ -1,0 +1,12 @@
+server {
+    listen 8082;
+    location / {
+        root /var/www/elastic;
+        autoindex on;
+        autoindex_exact_size off;
+        autoindex_localtime on;
+        index index.html;
+    }
+}
+
+

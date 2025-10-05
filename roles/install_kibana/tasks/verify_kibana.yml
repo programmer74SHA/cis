@@ -1,0 +1,47 @@
+---
+# roles/install_kibana/tasks/verify_kibana.yml
+# Verify Kibana installation and health
+
+- name: Wait for Kibana container to be running
+  shell: docker ps | grep kibana-{{ inventory_hostname }} | grep -v "Exited"
+  register: kibana_container_check
+  until: kibana_container_check.rc == 0
+  retries: 10
+  delay: 30
+  changed_when: false
+
+- name: Wait for Kibana API to be responsive
+  uri:
+    url: "https://{{ ansible_default_ipv4.address }}:5601/api/status"
+    method: GET
+    validate_certs: no
+    timeout: 30
+    status_code: [200, 401]
+  register: kibana_api_health
+  until: kibana_api_health.status in [200, 401]
+  retries: 20
+  delay: 30
+
+- name: Display Kibana verification results
+  debug:
+    msg: |
+      ✅ Kibana Verification Results
+      ============================
+      
+      🐳 Container Status: {{ 'Running' if kibana_container_check.rc == 0 else 'Not Running' }}
+      🌐 API Health: {{ 'Responsive' if kibana_api_health.status in [200, 401] else 'Not Responsive' }}
+      
+      📊 Access Information:
+      - Kibana URL: https://{{ ansible_default_ipv4.address }}:5601
+      - Username: {{ kibana_elasticsearch_username }}
+      - Status: {{ 'Ready' if kibana_api_health.status in [200, 401] else 'Starting' }}
+      
+      🔧 Management Commands:
+      # View Kibana logs:
+      docker logs kibana-{{ inventory_hostname }}
+      
+      # Restart Kibana:
+      cd {{ kibana_docker_path }} && docker-compose restart
+      
+      # Check container status:
+      docker ps | grep kibana

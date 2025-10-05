@@ -1,0 +1,14 @@
+---
+- name: Setup NFS
+  block:
+    - name: install nfs server on BDA
+      apt:
+        name: nfs-kernel-server
+        state: present
+      when: "'BDA' in group_names"
+
+    - name: install nfs client on Data nodes
+      apt:
+        name: nfs-common
+        state: present
+      when: "'DATA-NODES' in group_names"

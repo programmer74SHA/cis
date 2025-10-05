@@ -1,0 +1,4 @@
+#!/bin/bash 
+
+
+kaf --config /etc/siem/kaf tg logstash

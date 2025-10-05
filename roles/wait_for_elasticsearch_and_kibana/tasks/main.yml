@@ -1,0 +1,7 @@
+---
+# tasks file for configure_elk
+- name: configure the elk cluster
+  block:
+    - name: wait for elastic kibana status
+      import_tasks: wait_for_elasticsearch_and_kibana.yml  
+  tags: [simple, cluster]

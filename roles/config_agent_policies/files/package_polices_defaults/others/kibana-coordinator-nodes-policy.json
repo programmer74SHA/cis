@@ -1,0 +1,238 @@
+{
+  "id": "kibana-coordinator-nodes-policy",
+  "name": "kibana (coordinator-nodes-policy)",
+  "namespace": "",
+  "policy_id": "coordinator-nodes-policy",
+  "enabled": true,
+  "package": {
+    "name": "kibana",
+    "version": ""
+  },
+  "inputs": [
+    {
+      "type": "logfile",
+      "policy_template": "kibana",
+      "enabled": true,
+      "streams": [
+        {
+          "enabled": true,
+          "data_stream": {
+            "type": "logs",
+            "dataset": "kibana.audit"
+          },
+          "vars": {
+            "paths": {
+              "type": "text",
+              "value": [
+                "/var/log/kibana/*_audit.json",
+                "/var/log/kibana/audit.log"
+              ]
+            }
+          },
+          "compiled_stream": {
+            "paths": [
+              "/var/log/kibana/*_audit.json",
+              "/var/log/kibana/audit.log"
+            ],
+            "exclude_files": [
+              ".gz$"
+            ]
+          }
+        },
+        {
+          "enabled": true,
+          "data_stream": {
+            "type": "logs",
+            "dataset": "kibana.log"
+          },
+          "vars": {
+            "paths": {
+              "type": "text",
+              "value": [
+                "/var/log/kibana/kibana.stdout",
+                "/var/log/kibana/kibana.log"
+              ]
+            }
+          },
+          "compiled_stream": {
+            "paths": [
+              "/var/log/kibana/kibana.stdout",
+              "/var/log/kibana/kibana.log"
+            ],
+            "exclude_files": [
+              ".gz$"
+            ]
+          }
+        }
+      ],
+      "vars": {
+        "condition": {
+          "type": "text"
+        }
+      }
+    },
+    {
+      "type": "http/metrics",
+      "policy_template": "kibana",
+      "enabled": false,
+      "streams": [
+        {
+          "enabled": false,
+          "data_stream": {
+            "type": "metrics",
+            "dataset": "kibana.background_task_utilization"
+          },
+          "vars": {
+            "period": {
+              "value": "10s",
+              "type": "text"
+            }
+          }
+        },
+        {
+          "enabled": false,
+          "data_stream": {
+            "type": "metrics",
+            "dataset": "kibana.task_manager_metrics"
+          },
+          "vars": {
+            "period": {
+              "value": "10s",
+              "type": "text"
+            }
+          }
+        }
+      ],
+      "vars": {
+        "hosts": {
+          "value": [
+            "http://localhost:5601"
+          ],
+          "type": "text"
+        },
+        "basepath": {
+          "type": "text"
+        },
+        "username": {
+          "type": "text"
+        },
+        "password": {
+          "type": "password"
+        },
+        "ssl": {
+          "value": "#certificate_authorities: [\"/etc/ca.crt\"]\n#certificate: \"/etc/client.crt\"\n#key: \"/etc/client.key\"",
+          "type": "yaml"
+        }
+      }
+    },
+    {
+      "type": "kibana/metrics",
+      "policy_template": "kibana",
+      "enabled": false,
+      "streams": [
+        {
+          "enabled": false,
+          "data_stream": {
+            "type": "metrics",
+            "dataset": "kibana.stack_monitoring.cluster_actions"
+          },
+          "vars": {
+            "period": {
+              "value": "10s",
+              "type": "text"
+            }
+          }
+        },
+        {
+          "enabled": false,
+          "data_stream": {
+            "type": "metrics",
+            "dataset": "kibana.stack_monitoring.cluster_rules"
+          },
+          "vars": {
+            "period": {
+              "value": "10s",
+              "type": "text"
+            }
+          }
+        },
+        {
+          "enabled": false,
+          "data_stream": {
+            "type": "metrics",
+            "dataset": "kibana.stack_monitoring.node_actions"
+          },
+          "vars": {
+            "period": {
+              "value": "10s",
+              "type": "text"
+            }
+          }
+        },
+        {
+          "enabled": false,
+          "data_stream": {
+            "type": "metrics",
+            "dataset": "kibana.stack_monitoring.node_rules"
+          },
+          "vars": {
+            "period": {
+              "value": "10s",
+              "type": "text"
+            }
+          }
+        },
+        {
+          "enabled": false,
+          "data_stream": {
+            "type": "metrics",
+            "dataset": "kibana.stack_monitoring.stats"
+          },
+          "vars": {
+            "period": {
+              "value": "10s",
+              "type": "text"
+            }
+          }
+        },
+        {
+          "enabled": false,
+          "data_stream": {
+            "type": "metrics",
+            "dataset": "kibana.stack_monitoring.status"
+          },
+          "vars": {
+            "period": {
+              "value": "10s",
+              "type": "text"
+            }
+          }
+        }
+      ],
+      "vars": {
+        "hosts": {
+          "value": [
+            "http://localhost:5601"
+          ],
+          "type": "text"
+        },
+        "basepath": {
+          "type": "text"
+        },
+        "username": {
+          "type": "text"
+        },
+        "password": {
+          "type": "password"
+        },
+        "ssl": {
+          "value": "#certificate_authorities: [\"/etc/ca.crt\"]\n#certificate: \"/etc/client.crt\"\n#key: \"/etc/client.key\"",
+          "type": "yaml"
+        },
+        "condition": {
+          "type": "text"
+        }
+      }
+    }
+  ]
+}

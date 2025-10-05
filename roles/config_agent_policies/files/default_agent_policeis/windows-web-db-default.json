@@ -1,0 +1,11 @@
+{
+    "id": "windows-web-db-default",
+    "name": "windows-web-db-default",
+    "namespace": "default",
+    "data_output_id": "logstash-agentbase-output",
+    "monitoring_output_id": "logstash-agentbase-output",
+    "monitoring_enabled": [
+      "metrics",
+      "logs"
+    ]
+  }

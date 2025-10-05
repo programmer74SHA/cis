@@ -1,0 +1,20 @@
+#!/bin/bash
+# Cluster verification script for {{ inventory_hostname }}
+# Generated: {{ ansible_date_time.iso8601 }}
+
+echo "🏥 ELK Cluster Health Check"
+echo "=========================="
+
+# Check Docker containers
+echo "🐳 Docker Containers:"
+docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+
+# Check Elasticsearch health
+echo ""
+echo "📊 Elasticsearch Health:"
+{% for node in elasticsearch_nodes %}
+curl -s -k http://{{ ansible_default_ipv4.address }}:{{ (es_http_base_port | int) + (node.port_offset | int) }}/_cluster/health?pretty | head -10 || echo "Node {{ node.name }} not responding"
+{% endfor %}
+
+echo ""
+echo "✅ Health check completed!"

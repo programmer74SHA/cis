@@ -1,0 +1,41 @@
+{
+  "priority": 200,
+  "template": {
+    "mappings": {
+      "_meta": {
+        "package": {
+          "name": "udp"
+        },
+        "managed_by": "fleet",
+        "managed": true
+      }
+    }
+  },
+  "index_patterns": [
+    "{{ item }}-*"
+  ],
+  "data_stream": {
+    "hidden": false,
+    "allow_custom_routing": false
+  },
+  "composed_of": [
+    "logs@mappings",
+    "logs@settings",
+    "{{ item }}@package",
+	  "{{ item }}@custom",
+    "ecs@mappings",
+    "ecs@dynamic_templates@all",
+    ".fleet_globals-1",
+    ".fleet_agent_id_verification-1"
+  ],
+  "_meta": {
+    "package": {
+      "name": "udp"
+    },
+    "managed_by": "fleet",
+    "managed": true
+  },
+  "ignore_missing_component_templates": [
+          "{{ item }}@custom"
+  ]
+}

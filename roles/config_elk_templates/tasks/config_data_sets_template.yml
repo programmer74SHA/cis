@@ -1,0 +1,17 @@
+- name: Import data sets templates
+  uri:
+    url: "{{ elastic_address }}/_index_template/{{ item }}?pretty"
+    method: PUT
+    body: "{{ lookup('template', 'templates/index_template.json.j2') }}"
+    body_format: json
+    headers:
+      Content-Type: application/json
+    user: "{{ elk_user }}"
+    password: "{{ elk_password }}"
+    validate_certs: no
+  with_items:
+    - "logs-sophos"
+    - "logs-fortiweb"
+    - "logs-apkgate"
+    - "logs-padvish"
+    - "logs-kaspersky"

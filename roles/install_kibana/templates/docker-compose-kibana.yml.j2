@@ -1,0 +1,70 @@
+version: '3.8'
+
+services:
+  kibana:
+    image: {{ kibana_docker_image | default('docker.apk-group.net/kibana') }}:{{ kibana_version | default('8.18.2') }}
+    container_name: kibana-{{ inventory_hostname }}
+    hostname: {{ hostvars[inventory_hostname].node_hostname }}
+    restart: unless-stopped
+    
+    networks:
+      - {{ docker_network_name }}
+    
+    extra_hosts:
+{% for host in groups['ELASTICSEARCH'] %}
+{% if host != inventory_hostname %}
+      - "{{ hostvars[host].node_hostname }}:{{ hostvars[host].ansible_host }}"
+{% endif %}
+{% endfor %}
+    
+    ports:
+      - "0.0.0.0:5601:5601"
+    
+    environment:
+      - "ELASTICSEARCH_HOSTS=https://{{ hostvars[inventory_hostname].node_hostname }}:9200"
+      - "ELASTICSEARCH_USERNAME=kibana_system"
+      - "ELASTICSEARCH_PASSWORD={{ kibana_elasticsearch_password }}"
+      - "ELASTICSEARCH_SSL_CERTIFICATEAUTHORITIES=/usr/share/kibana/config/certs/ca/ca.crt"
+      - "ELASTICSEARCH_SSL_VERIFICATIONMODE=none"
+      - "ELASTICSEARCH_PINGTIMEOUT=30000"
+      - "ELASTICSEARCH_REQUESTTIMEOUT=120000"
+      - "SERVER_HOST=0.0.0.0"
+      - "SERVER_PORT=5601"
+      - "SERVER_NAME={{ inventory_hostname }}-kibana"
+      - "SERVER_PUBLICBASEURL=https://{{ hostvars[inventory_hostname].node_hostname }}:5601"
+      - "XPACK_ENCRYPTEDSAVEDOBJECTS_ENCRYPTIONKEY=7946e75bc0cad7f510d933d288ead678"
+      - "XPACK_REPORTING_ENCRYPTIONKEY=bd7bc65d6208bb27cb52b035a25d0e72"
+      - "XPACK_SECURITY_ENCRYPTIONKEY=2f80b83bdec5bdab7d5e9c09f67c1141"
+      - "LOGGING_ROOT_LEVEL=info"
+      - "NODE_OPTIONS=--max-old-space-size=2048"
+      - "TELEMETRY_OPTIN=false"
+      - "TELEMETRY_ALLOWCHANGINGOPTINSTATUS=false"
+
+    volumes:
+      - "{{ kibana_data_path }}:/usr/share/kibana/data:Z"
+      - "{{ kibana_logs_path }}:/usr/share/kibana/logs:Z"
+      - "{{ kibana_config_path }}/kibana.yml:/usr/share/kibana/config/kibana.yml:ro,Z"
+      - "{{ certs_base_path }}:/usr/share/kibana/config/certs:ro,Z"
+
+    healthcheck:
+      test: 
+        - "CMD-SHELL"
+        - "curl -f http://127.0.0.1:5601/api/status || exit 1"
+      interval: 30s
+      timeout: 30s
+      retries: 10
+      start_period: 120s
+
+    user: "1000:1000"
+    
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 1G
+
+networks:
+  {{ docker_network_name }}:
+    name: {{ docker_network_name }}
+    external: true

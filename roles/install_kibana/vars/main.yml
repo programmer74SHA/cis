@@ -1,0 +1,44 @@
+---
+# Docker-specific variables
+kibana_version: "8.18.2"
+kibana_docker_image: "docker.apk-group.net/kibana"
+
+# ADDED: Base path variable (should come from inventory but defined here as fallback)
+kibana_base_path: "/usr/share/siem/kibana"
+
+# Kibana paths
+kibana_docker_path: "{{ kibana_base_path }}"
+kibana_data_path: "{{ kibana_base_path }}/data"
+kibana_logs_path: "{{ kibana_base_path }}/logs"
+kibana_config_path: "{{ kibana_base_path }}/config"
+kibana_certs_path: "{{ kibana_base_path }}/certs"
+kibana_compose_path: "{{ kibana_base_path }}/docker-compose.yml"
+
+
+# Original variables (kept for compatibility)
+kibana_home_directory_path: "/var/lib/kibana"
+kibana_certs_directory_path: "{{ kibana_home_directory_path }}/certs"
+kibana_ca_filename: "ca.crt"
+kibana_ca_file_path: "{{ kibana_certs_directory_path }}/ca/{{ kibana_ca_filename }}"
+kibana_csr_filename: "siem_elk8.csr"
+kibana_csr_file_path: "{{ kibana_certs_directory_path }}/{{ kibana_csr_filename }}"
+kibana_private_key_file_name: "kibana.key"
+kibana_private_key_file_path: "{{ kibana_certs_directory_path }}/kibana/{{ kibana_private_key_file_name }}"
+kibana_crt_file_name: "kibana.crt"
+kibana_crt_file_path: "{{ kibana_certs_directory_path }}/kibana/{{ kibana_crt_file_name }}"
+
+# Certificate configuration
+kibana_certificate_country_name: "IR"
+kibana_certificate_organization_name: "APK"
+kibana_certificate_organizational_unit_name: "SIEM"
+kibana_certificate_email_address: "info@apk-group.net"
+
+# SSL certificate paths (reference Elasticsearch certs)
+es_ssl_certificate_path: "/usr/share/siem/elasticsearch/certs"
+es_conf_dir: "/usr/share/siem/elasticsearch/config"
+certs_base_path: "/usr/share/siem/elasticsearch/certs"
+
+# Update variables
+kibana_backup_folder: /var/siem/tmp/kibana-backup
+kibana_data_backup_path: "{{ kibana_backup_folder }}/data"
+kibana_config_backup_path: "{{ kibana_backup_folder }}/config"

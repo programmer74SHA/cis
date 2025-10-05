@@ -1,0 +1,30 @@
+- name: "APK SIEM Product Installer"
+  hosts: all
+  roles:
+    - pre_checks
+    - add-new-node
+    # - deploy_apt_repository 
+    # - install_dependencies 
+    - install_elastic 
+    - install_kibana
+    # - setup_shell_scripts
+    # - deploy_nba_node
+    # - setup_nfs
+    # - setup_ntp_server
+    - integrations_server
+    # - elasticsearch_artifacts
+    # - elasticsearch-maps-server
+    # - install_logstash
+    # - wait_for_elasticsearch_and_kibana
+    # - config_fleet_settings
+    # - config_outputs
+    # - config_agent_policies
+    # - import_ingest_pipelines
+    # - config_elk_templates
+    # - install_kaf
+    # - install_elastic_agent
+    # - copy_fleet
+    # - health_check
+    # - hardening
+    # - versioning
+    # - hardening_cis

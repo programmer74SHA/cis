@@ -1,0 +1,50 @@
+---
+- name: Wait for Elasticsearch and Kibana to be up and healthy
+  block:
+    - name: Restart elasticsearch
+      service: 
+        name: elasticsearch
+        state: restarted
+
+    - name: Wait for Elasticsearch API to be healthy
+      uri:
+        url: "{{ elastic_address }}/_cluster/health"
+        method: GET
+        return_content: yes
+        status_code: 200
+        timeout: 10
+        user: "{{ elk_user }}"
+        password: "{{ elk_password }}"
+        validate_certs: no
+      register: elasticsearch_status
+      retries: 20
+      delay: 20
+      until: 
+        - elasticsearch_status.status == 200
+        - '"green" in elasticsearch_status.json["status"] or "yellow" in elasticsearch_status.json["status"]'
+
+    - name: Restart kibana
+      service:
+        name: kibana
+        state: restarted
+
+    - name: Wait for Kibana API to be ready
+      uri:
+        url: "{{ kibana_address }}/api/status"
+        method: GET
+        return_content: yes
+        status_code: 200
+        timeout: 10
+        user: "{{ elk_user }}"
+        password: "{{ elk_password }}"
+        validate_certs: no
+      register: kibana_status
+      retries: 20
+      delay: 20
+      until: 
+        - kibana_status.status == 200
+        - '"available" in kibana_status.json["status"]["overall"]["level"]'
+    - name: wait for services to stabilize
+      wait_for:
+        sleep: 200
+  when: "'BDA' in group_names"

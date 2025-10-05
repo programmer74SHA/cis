@@ -1,0 +1,27 @@
+---
+- name: Run pre-checks before main tasks
+  block:
+    - name: checking the host status
+      import_tasks: hosts_status_checking.yml
+
+    - name: Checking role nodes
+      import_tasks: role_checking.yml
+    
+    - name: make sure lshell user password is set
+      import_tasks: lshell_check.yml
+      
+    - name: make sure installer run with root user 
+      import_tasks: check_root_user.yml
+
+    - name: disbale ipv6
+      import_tasks: sysctl_config.yml
+      
+    - name: increase bash history size
+      import_tasks: increase_bash_history.yml
+  tags: [cluster, new-node, simple, add-scanner, add-collector, update]
+
+# - name: checking for update possibility
+#   import_tasks: check_update_possibility.yml
+#   when: "'ELASTICSEARCH' in group_names"
+#   tags: update
+  

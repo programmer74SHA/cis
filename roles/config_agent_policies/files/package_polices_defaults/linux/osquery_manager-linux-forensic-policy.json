@@ -1,0 +1,18 @@
+{
+    "id": "osquery_manager-linux-forensic-policy",
+    "name": "osquery_manager (linux-forensic-policy)",
+    "namespace": "",
+    "policy_id": "linux-forensic-policy",
+    "package": {
+      "name": "osquery_manager",
+      "version": ""
+    },
+    "inputs": [
+        {
+          "type": "osquery",
+          "enabled": true,
+          "streams": [],
+          "policy_template": "osquery_manager"
+        }
+      ]
+  }

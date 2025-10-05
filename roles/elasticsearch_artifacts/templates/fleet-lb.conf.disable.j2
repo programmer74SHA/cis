@@ -1,0 +1,22 @@
+upstream fleet_servers {
+{% for host in groups['SF'] %}
+        server {{ hostvars[host].ansible_default_ipv4.address | default('127.0.0.1') }}:8222;
+{% endfor %}
+}
+
+server {
+        listen 8222 ssl;
+        ssl_certificate /etc/elasticsearch/certs/fleet-server/fleet-server.crt;
+        ssl_certificate_key /etc/elasticsearch/certs/fleet-server/fleet-server.key;
+        ssl_verify_client off;
+
+        location / {
+            proxy_pass https://fleet_servers;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+	    proxy_connect_timeout      1800;
+	    proxy_send_timeout         1800;
+	    proxy_read_timeout         1800;
+        }
+}
