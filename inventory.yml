@@ -96,21 +96,21 @@ all:
 
         # BDA node (Business Data Analytics - main management node)
         bda:
-          ansible_host: 192.168.166.130
+          ansible_host: 192.168.166.134
           ansible_user: root
           ansible_ssh_pass: 'password'
           ansible_connection: ssh
           ansible_ssh_common_args: '-o StrictHostKeyChecking=no'
           node_hostname: bda.apk-siem.local
           docker_network_name: 'elastic'
-          # docker_network_subnet: '172.33.0.0/16'
+          docker_network_subnet: '172.30.0.0/16'
           # Service configuration for BDA
           install_kibana: true
           install_elasticsearch: true
           elasticsearch_nodes:
-            - name: bda-master
+            - name: coordinator
               roles: ['remote_cluster_client']
-              port_offset: 0
+              port_offset: 6
               group_membership: ['BDA', 'ELASTICSEARCH']
               heap_size: '8g'
 

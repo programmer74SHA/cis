@@ -1,0 +1,29 @@
+---
+# Build discovery configuration from inventory
+- name: Initialize discovery configuration lists
+  set_fact:
+    elasticsearch_seed_hosts_list: []
+    elasticsearch_master_node_names: []
+
+- name: Collect seed hosts from MASTER group
+  set_fact:
+    elasticsearch_seed_hosts_list: "{{ elasticsearch_seed_hosts_list + [hostvars[item].node_hostname + ':' + ((es_transport_base_port | int) + (master_node.port_offset | int)) | string] }}"
+    elasticsearch_master_node_names: "{{ elasticsearch_master_node_names + [master_node.name] }}"
+  loop: "{{ groups['MASTER'] }}"
+  vars:
+    master_nodes: "{{ hostvars[item].elasticsearch_nodes | default([]) | selectattr('roles', 'contains', 'master') | list }}"
+    master_node: "{{ master_nodes[0] }}"
+  when: 
+    - hostvars[item].elasticsearch_nodes is defined
+    - master_nodes | length > 0
+
+- name: Create seed hosts string for environment variables
+  set_fact:
+    elasticsearch_seed_hosts: "{{ elasticsearch_seed_hosts_list | join(',') }}"
+
+- name: Display discovery configuration
+  debug:
+    msg: |
+      Discovery Configuration:
+      Seed hosts: {{ elasticsearch_seed_hosts_list | join(', ') }}
+      Master nodes: {{ elasticsearch_master_node_names | join(', ') }}

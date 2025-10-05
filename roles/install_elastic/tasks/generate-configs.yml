@@ -1,0 +1,51 @@
+---
+# Generate node configurations using FIXED template
+- name: Generate Elasticsearch configurations for each node
+  template:
+    src: elasticsearch-node.yml.j2
+    dest: "{{ elasticsearch_docker_path }}/{{ node.name }}/config/elasticsearch.yml"
+    owner: "1000"
+    group: "1000"
+    mode: "0644"
+    backup: yes
+  loop: "{{ elasticsearch_nodes }}"
+  loop_control:
+    loop_var: node
+    label: "{{ node.name }}"
+  register: elasticsearch_config_result
+
+- name: Generate JVM options for each node
+  template:
+    src: jvm.options.j2
+    dest: "{{ elasticsearch_docker_path }}/{{ node.name }}/config/jvm.options"
+    owner: "1000"
+    group: "1000"
+    mode: "0644"
+    backup: yes
+  loop: "{{ elasticsearch_nodes }}"
+  loop_control:
+    loop_var: node
+    label: "{{ node.name }}"
+  register: jvm_config_result
+
+- name: Final validation of all configuration files
+  stat:
+    path: "{{ elasticsearch_docker_path }}/{{ node.name }}/config/{{ config_file }}"
+  register: final_validation
+  loop: "{{ elasticsearch_nodes | product(['elasticsearch.yml', 'jvm.options']) | list }}"
+  vars:
+    node: "{{ item[0] }}"
+    config_file: "{{ item[1] }}"
+  loop_control:
+    label: "{{ node.name }}/{{ config_file }}"
+
+- name: Fail if any configuration files are still missing
+  fail:
+    msg: |
+      CRITICAL: Configuration file validation failed after all attempts!
+      Missing file: {{ item.item[0].name }}/{{ item.item[1] }}
+      This indicates a serious filesystem or permission issue.
+  loop: "{{ final_validation.results }}"
+  when: 
+    - final_validation.results is defined
+    - not item.stat.exists or not item.stat.isreg

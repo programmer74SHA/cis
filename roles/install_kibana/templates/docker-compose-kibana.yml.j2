@@ -12,16 +12,17 @@ services:
     
     extra_hosts:
 {% for host in groups['ELASTICSEARCH'] %}
-{% if host != inventory_hostname %}
       - "{{ hostvars[host].node_hostname }}:{{ hostvars[host].ansible_host }}"
-{% endif %}
 {% endfor %}
+
     
     ports:
       - "0.0.0.0:5601:5601"
     
     environment:
-      - "ELASTICSEARCH_HOSTS=https://{{ hostvars[inventory_hostname].node_hostname }}:9200"
+{% set es_node = hostvars[inventory_hostname].elasticsearch_nodes[0] %}
+{% set es_port = (es_http_base_port | int) + (es_node.port_offset | int) %}
+      - "ELASTICSEARCH_HOSTS=https://{{ es_node.name }}.{{ top_level_domain }}:{{ es_port }}"
       - "ELASTICSEARCH_USERNAME=kibana_system"
       - "ELASTICSEARCH_PASSWORD={{ kibana_elasticsearch_password }}"
       - "ELASTICSEARCH_SSL_CERTIFICATEAUTHORITIES=/usr/share/kibana/config/certs/ca/ca.crt"

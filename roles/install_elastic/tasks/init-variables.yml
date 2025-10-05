@@ -1,0 +1,9 @@
+---
+# Initialize deployment variables
+- name: Set Elasticsearch nodes fact
+  set_fact:
+    elasticsearch_nodes: "{{ hostvars[inventory_hostname].elasticsearch_nodes | default([]) }}"
+
+- name: Set has_elasticsearch_nodes fact
+  set_fact:
+    has_elasticsearch_nodes: "{{ (hostvars[inventory_hostname].elasticsearch_nodes | default([])) | length > 0 }}"

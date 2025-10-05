@@ -1,85 +1,6 @@
 ---
 - name: "🚀 Kibana Installation on BDA Node"
   block:
-    - name: Initialize Kibana variables
-      set_fact:
-        kibana_docker_path: "{{ kibana_base_path }}"
-        kibana_data_path: "{{ kibana_base_path }}/data"
-        kibana_logs_path: "{{ kibana_base_path }}/logs"
-        kibana_config_path: "{{ kibana_base_path }}/config"
-        kibana_certs_path: "{{ kibana_base_path }}/certs"
-        kibana_compose_path: "{{ kibana_base_path }}/docker-compose.yml"
-        kibana_elasticsearch_hosts: "https://127.0.0.1:9200"
-        kibana_elasticsearch_username: "kibana_system"
-
-    # - name: Change kibana_system password and update Kibana configuration
-    #   block:
-    #     - name: Change kibana_system password in Elasticsearch
-    #       ansible.builtin.uri:
-    #         url: "{{ es_api_endpoint | default('https://' + hostvars[inventory_hostname].node_hostname + ':' + es_http_base_port | string) }}/_security/user/kibana_system/_password"
-    #         method: PUT
-    #         user: "{{ es_api_basic_auth_username }}"
-    #         password: "{{ es_api_basic_auth_password }}"
-    #         body_format: json
-    #         body: |
-    #           {
-    #             "password": "{{ kibana_system_new_password }}"
-    #           }
-    #         headers:
-    #           Content-Type: "application/json"
-    #         ca_path: "{{ certs_base_path }}/ca/ca.crt"
-    #         validate_certs: yes
-    #         status_code: 200
-    #       register: password_change_result
-    #       failed_when: password_change_result.status != 200
-    #       when: 
-    #         - "'KIBANA' in group_names"
-    #         - kibana_system_new_password is defined
-
-    # - name: Create siem user with superuser role in Elasticsearch
-    #   block:
-    #     - name: Check if siem user already exists
-    #       ansible.builtin.uri:
-    #         url: "{{ es_api_endpoint | default('https://' + hostvars[inventory_hostname].node_hostname + ':' + es_http_base_port | string) }}/_security/user/siem"
-    #         method: GET
-    #         user: "{{ es_api_basic_auth_username }}"
-    #         password: "{{ es_api_basic_auth_password }}"
-    #         headers:
-    #           Content-Type: "application/json"
-    #         ca_path: "{{ certs_base_path }}/ca/ca.crt"
-    #         validate_certs: yes
-    #         status_code: [200, 404]
-    #       register: siem_user_check
-    #       when: 
-    #         - "'ELASTICSEARCH' in group_names"
-    #         - siem_user_password is defined
-
-    # - name: Create siem user with superuser role
-    #   ansible.builtin.uri:
-    #     url: "{{ es_api_endpoint | default('https://' + hostvars[inventory_hostname].node_hostname + ':' + es_http_base_port | string) }}/_security/user/siem"
-    #     method: PUT
-    #     user: "{{ es_api_basic_auth_username }}"
-    #     password: "{{ es_api_basic_auth_password }}"
-    #     body_format: json
-    #     body: |
-    #       {
-    #         "password": "{{ siem_user_password }}",
-    #         "roles": ["superuser"],
-    #         "full_name": "SIEM Administrator",
-    #         "email": "siem@admin.example.com"
-    #       }
-    #     headers:
-    #       Content-Type: "application/json"
-    #     ca_path: "{{ certs_base_path }}/ca/ca.crt"
-    #     validate_certs: yes
-    #     status_code: [200, 201]
-    #   when: 
-    #     - "'ELASTICSEARCH' in group_names"
-    #     - siem_user_password is defined
-    #     - siem_user_check.status == 404
-    #   register: siem_user_create_result
-
-
     - name: Check if Elasticsearch is running (optional)
       uri:
         url: "http://{{ ansible_default_ipv4.address }}:9200/_cluster/health"
@@ -113,33 +34,12 @@
         remote_src: yes
       ignore_errors: true
 
-    - name: Wait for Elasticsearch to be ready
-      uri:
-        url: "https://{{ ansible_default_ipv4.address }}:{{ es_http_base_port | default(9200) }}/_cluster/health"
-        method: GET
-        user: "{{ es_api_basic_auth_username | default('elastic') }}"
-        password: "{{ es_api_basic_auth_password }}"
-        force_basic_auth: yes
-        validate_certs: no
-        status_code: [200]
-        timeout: 30
-      register: es_ready
-      until: es_ready.status == 200
-      retries: 30
-      delay: 10
-      ignore_errors: yes
-
-    - name: Display Elasticsearch readiness
-      debug:
-        msg: |
-          Elasticsearch Status: {{ 'Ready' if es_ready.status | default(0) == 200 else 'Not Ready - Continuing anyway' }}
-
     - name: Set kibana_system user password
       uri:
         url: "https://{{ ansible_default_ipv4.address }}:{{ es_http_base_port | default(9200) }}/_security/user/kibana_system/_password"
         method: PUT
         user: "{{ es_api_basic_auth_username | default('elastic') }}"
-        password: "{{ elastic_password }}"
+        password: "{{ es_api_basic_auth_password }}"
         force_basic_auth: yes
         validate_certs: no
         body_format: json

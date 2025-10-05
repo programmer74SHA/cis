@@ -1,0 +1,31 @@
+---
+# Generate and validate Docker Compose configuration
+- name: Generate Docker Compose file for multi-node deployment
+  template:
+    src: docker-compose-elasticsearch.yml.j2
+    dest: "{{ elasticsearch_compose_path }}"
+    mode: "0644"
+    owner: root
+    group: root
+    backup: yes
+  register: compose_config
+
+- name: Check docker-compose file exists
+  stat:
+    path: "{{ elasticsearch_compose_path }}"
+  register: compose_file_check
+
+- name: Validate docker-compose syntax
+  shell: cd {{ elasticsearch_docker_path }} && docker-compose config > /dev/null
+  register: compose_validation
+  when: compose_file_check.stat.exists
+  changed_when: false
+
+- name: Fail if docker-compose validation fails
+  fail:
+    msg: |
+      Docker-compose file validation failed!
+      Error: {{ compose_validation.stderr }}
+  when: 
+    - compose_file_check.stat.exists
+    - compose_validation.rc != 0

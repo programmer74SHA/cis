@@ -42,3 +42,4 @@ certs_base_path: "/usr/share/siem/elasticsearch/certs"
 kibana_backup_folder: /var/siem/tmp/kibana-backup
 kibana_data_backup_path: "{{ kibana_backup_folder }}/data"
 kibana_config_backup_path: "{{ kibana_backup_folder }}/config"
+

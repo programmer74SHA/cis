@@ -1,0 +1,10 @@
+---
+# Configure /etc/hosts for hostname resolution
+- name: Add all cluster hosts to /etc/hosts
+  lineinfile:
+    path: /etc/hosts
+    regexp: "^{{ hostvars[item].ansible_host }}\\s+{{ hostvars[item].node_hostname }}"
+    line: "{{ hostvars[item].ansible_host }} {{ hostvars[item].node_hostname }}"
+    state: present
+  loop: "{{ groups['ELASTICSEARCH'] }}"
+  when: hostvars[item].node_hostname is defined

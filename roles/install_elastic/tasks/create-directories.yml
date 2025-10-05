@@ -1,0 +1,28 @@
+---
+# Create complete directory structure
+- name: Create base Elasticsearch directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: "1000"
+    group: "1000"
+    mode: "0755"
+  loop:
+    - "{{ elasticsearch_docker_path }}"
+    - "{{ certs_base_path }}"
+        
+- name: Create node-specific directories
+  file:
+    path: "{{ elasticsearch_docker_path }}/{{ node.name }}/{{ dir_type }}"
+    state: directory
+    owner: "1000"
+    group: "1000"
+    mode: "0755"
+  with_nested:
+    - "{{ elasticsearch_nodes }}"
+    - ["data", "logs", "config"]
+  vars:
+    node: "{{ item[0] }}"
+    dir_type: "{{ item[1] }}"
+  loop_control:
+    label: "{{ node.name }}/{{ dir_type }}"
