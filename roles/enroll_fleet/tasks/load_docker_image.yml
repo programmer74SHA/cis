@@ -1,0 +1,29 @@
+- name: load the elastic-agent docker image
+  block:
+    - name: Create directory for fleet server docker images
+      file:
+        path: "{{ fleet_server_tmp_dir }}"
+        state: directory
+
+    - name: Copy docker images
+      synchronize:
+        src: files/elastic-agent.tar.gz
+        dest: "{{ fleet_server_tmp_dir }}/elastic-agent.tar.gz"
+
+    - name: Load docker images
+      command: docker load -i {{ fleet_server_tmp_dir }}/elastic-agent.tar.gz
+      register: docker_load_output
+
+    - name: Extract image ID from docker load output
+      set_fact:
+        loaded_image_id: "{{ (docker_load_output.stdout | regex_search('Loaded image ID: (sha256:[a-f0-9]{64})', '\\1'))[0] | trim }}"
+
+    - name: Tag the loaded Docker image
+      shell: |
+        docker tag {{ loaded_image_id }} {{ docker_image_name }}:{{ docker_image_tag }}
+
+    - name: remove the docker image tmp file
+      file:
+        path: "{{ fleet_server_tmp_dir }}/elastic-agent.tar.gz"
+        state: absent
+

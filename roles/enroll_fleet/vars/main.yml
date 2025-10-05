@@ -1,0 +1,8 @@
+---
+# defaults file for copy_fleet
+docker_image_name: "registry.apk-group.net/apksiem/beats/elastic-agent"
+docker_image_tag: "8.18.2"
+
+fleet_server_dir: "/usr/share/siem/fleet-server"
+docker_compose_path: "{{ fleet_server_dir  }}/docker-compose.yml"
+fleet_server_tmp_dir: "/var/siem/tmp/fleet-server"

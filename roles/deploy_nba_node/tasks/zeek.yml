@@ -1,0 +1,12 @@
+---
+
+- name: Zeek configuration
+  block:
+    - name: Import zeek plugins into the zeek
+      import_tasks: zeek_configurations/import_zeek_plugins.yml
+
+    - name: config zeek log rotations
+      import_tasks: zeek_configurations/zeek_logRotations.yml
+
+    - name: config zeek service
+      import_tasks: zeek_configurations/config_zeek_service.yml

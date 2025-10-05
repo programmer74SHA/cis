@@ -43,3 +43,13 @@ kibana_backup_folder: /var/siem/tmp/kibana-backup
 kibana_data_backup_path: "{{ kibana_backup_folder }}/data"
 kibana_config_backup_path: "{{ kibana_backup_folder }}/config"
 
+# SSL Configuration
+kibana_enable_ssl: true
+
+# Feature flags (can be overridden in inventory)
+enable_ml: true
+enable_apm: false
+enable_siem: true
+enable_maps: true
+enable_alerting: true
+enable_reporting: true

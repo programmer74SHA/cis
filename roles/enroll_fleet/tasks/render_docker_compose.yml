@@ -1,0 +1,77 @@
+- name: "Run on SF group only"
+  block:
+    - name: Create directory for fleet server docker compose file
+      file:
+        path: "{{ fleet_server_dir }}"
+        state: directory
+
+    - name: Retrieve hostname from inventory
+      set_fact:
+        hostname: "{{ inventory_hostname }}"
+
+    - name: Set fact for the token name
+      set_fact:
+        token_name: "{{ hostname }}"
+
+    - name: Check if Elasticsearch service token for the hostname exists
+      command: /usr/share/elasticsearch/bin/elasticsearch-service-tokens list elastic/fleet-server
+      register: es_token_list_output
+
+    - name: Set fact for token existence
+      set_fact:
+        token_exists: "{{ es_token_list_output.stdout is search(token_name) }}"
+
+    - name: Debug token existence
+      debug:
+        msg: "Token {{ token_name }} exists: {{ token_exists }}"
+
+    - name: Delete existing Elasticsearch service token for the hostname
+      command: /usr/share/elasticsearch/bin/elasticsearch-service-tokens delete elastic/fleet-server "{{ token_name }}"
+      when: token_exists
+      register: delete_token_result
+      ignore_errors: true
+      changed_when: false
+
+    - name: Debug delete_token_result
+      debug:
+        var: delete_token_result
+      when: delete_token_result is defined
+
+    - name: Check if deletion failed and report error
+      fail:
+        msg: "Failed to delete the Elasticsearch service token '{{ token_name }}'. Error: {{ delete_token_result.stderr | default('N/A') }}"
+      when: 
+        - delete_token_result is defined
+        - delete_token_result.rc is defined
+        - delete_token_result.rc != 0
+        - delete_token_result.stderr is defined
+        - delete_token_result.stderr is not search('does not exist')
+
+    - name: Create Elasticsearch service token for the hostname
+      command: /usr/share/elasticsearch/bin/elasticsearch-service-tokens create elastic/fleet-server "{{ token_name }}"
+      register: es_token_generator_output
+      when: not token_exists or (delete_token_result is defined and delete_token_result.rc == 0)
+
+    - name: Extract token from output
+      set_fact:
+        es_service_token_fleet: "{{ es_token_generator_output.stdout.split('=')[1] | trim }}"
+
+    - name: "Set the correct permition to file"
+      file:
+        path: /etc/elasticsearch/service_tokens
+        state: file
+        mode: '0644'
+
+    - name: Extract ca_trusted_fingerprint
+      shell: grep 'ca_trusted_fingerprint:' /etc/kibana/kibana.yml | awk '{print $2}'
+      register: cert_fingerprint_output
+      delegate_to: localhost
+
+    - name: Set cert_fingerprint variable
+      set_fact:
+        cert_fingerprint: "{{ cert_fingerprint_output.stdout }}"
+        
+    - name: Render docker-compose.yml from template
+      template:
+        src: templates/docker-compose.yml.j2
+        dest: "{{ docker_compose_path }}"

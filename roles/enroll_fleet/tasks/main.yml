@@ -1,0 +1,24 @@
+- name: Generate docker compose
+  block:
+    - name: load elastic agent docker image
+      import_tasks: load_docker_image.yml
+      when: "'SF' in group_names or 'COLLECTOR' in group_names or (('LB' not in groups or groups['LB'] | length == 0) and inventory_hostname in groups['SF'])"
+      tags: [simple, add-collector]
+    
+    - name: render docker compose
+      import_tasks: render_docker_compose.yml
+      when: "'SF' in group_names"
+      tags: simple
+
+    - name: copy docker compose
+      import_tasks: copy_docker_compose.yml
+
+- name: Generate docker compose on cluster mode
+  block:
+    - name: load elastic agent docker image
+      import_tasks: load_docker_image.yml
+    
+    - name: render docker compose
+      import_tasks: render_docker_compose.yml
+  when: "'SF' in group_names and groups['SF'] | length == 1"
+  tags: [cluster, update]

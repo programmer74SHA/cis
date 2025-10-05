@@ -1,0 +1,38 @@
+---
+# Generate Kibana configuration
+- name: Get Elasticsearch node information
+  set_fact:
+    es_node: "{{ hostvars[inventory_hostname].elasticsearch_nodes[0] }}"
+    es_port: "{{ (es_http_base_port | int) + (hostvars[inventory_hostname].elasticsearch_nodes[0].port_offset | int) }}"
+  when: hostvars[inventory_hostname].elasticsearch_nodes is defined
+
+- name: Generate Kibana configuration file
+  template:
+    src: kibana.yml.j2
+    dest: "{{ kibana_config_path }}/kibana.yml"
+    owner: "1000"
+    group: "1000"
+    mode: "0660"
+    backup: yes
+  register: kibana_config_result
+
+- name: Validate Kibana configuration file exists
+  stat:
+    path: "{{ kibana_config_path }}/kibana.yml"
+  register: kibana_config_check
+
+- name: Fail if Kibana configuration file is missing
+  fail:
+    msg: |
+      CRITICAL: Kibana configuration file not created!
+      Expected path: {{ kibana_config_path }}/kibana.yml
+  when: not kibana_config_check.stat.exists
+
+- name: Display configuration status
+  debug:
+    msg: |
+      ✅ Kibana configuration generated
+      - Config file: {{ kibana_config_path }}/kibana.yml
+      - Elasticsearch host: {{ es_node.name }}.{{ top_level_domain if es_node is defined else 'N/A' }}
+      - Elasticsearch port: {{ es_port | default('9200') }}
+      - SSL enabled: {{ kibana_enable_ssl }}

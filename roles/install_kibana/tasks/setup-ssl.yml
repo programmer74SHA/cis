@@ -1,0 +1,108 @@
+---
+# Setup SSL certificates for Kibana
+- name: Check if Elasticsearch CA certificate exists
+  stat:
+    path: "{{ certs_base_path }}/ca/ca.crt"
+  register: es_ca_exists
+
+- name: Copy Elasticsearch CA certificate to Kibana certs directory
+  copy:
+    src: "{{ certs_base_path }}/ca/ca.crt"
+    dest: "{{ kibana_certs_path }}/ca.crt"
+    owner: "1000"
+    group: "1000"
+    mode: "0644"
+    remote_src: yes
+  when: es_ca_exists.stat.exists
+
+- name: Create OpenSSL config for Kibana certificate
+  copy:
+    dest: "{{ kibana_certs_path }}/kibana.conf"
+    content: |
+      [req]
+      distinguished_name = req_distinguished_name
+      req_extensions = v3_req
+      prompt = no
+
+      [req_distinguished_name]
+      C = US
+      ST = State
+      L = City
+      O = APK SIEM
+      CN = {{ inventory_hostname }}-kibana
+
+      [v3_req]
+      basicConstraints = CA:FALSE
+      keyUsage = nonRepudiation, digitalSignature, keyEncipherment
+      extendedKeyUsage = serverAuth, clientAuth
+      subjectAltName = @alt_names
+
+      [alt_names]
+      DNS.1 = {{ inventory_hostname }}-kibana
+      DNS.2 = {{ hostvars[inventory_hostname].node_hostname }}
+      DNS.3 = kibana-{{ inventory_hostname }}
+      DNS.4 = localhost
+      IP.1 = {{ hostvars[inventory_hostname].ansible_host }}
+      IP.2 = 127.0.0.1
+    mode: "0644"
+
+- name: Generate Kibana private key
+  command: openssl genrsa -out {{ kibana_certs_path }}/kibana.key 2048
+  args:
+    creates: "{{ kibana_certs_path }}/kibana.key"
+
+- name: Generate Kibana certificate request
+  command: >
+    openssl req -new
+    -key {{ kibana_certs_path }}/kibana.key
+    -out {{ kibana_certs_path }}/kibana.csr
+    -config {{ kibana_certs_path }}/kibana.conf
+  args:
+    creates: "{{ kibana_certs_path }}/kibana.csr"
+
+- name: Sign Kibana certificate with CA
+  command: >
+    openssl x509 -req -days 365
+    -in {{ kibana_certs_path }}/kibana.csr
+    -CA {{ certs_base_path }}/ca/ca.crt
+    -CAkey {{ certs_base_path }}/ca/ca.key
+    -CAcreateserial
+    -out {{ kibana_certs_path }}/kibana.crt
+    -extensions v3_req
+    -extfile {{ kibana_certs_path }}/kibana.conf
+  args:
+    creates: "{{ kibana_certs_path }}/kibana.crt"
+
+- name: Set Kibana certificate permissions
+  file:
+    path: "{{ item.path }}"
+    owner: "1000"
+    group: "1000"
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: "{{ kibana_certs_path }}/kibana.key", mode: "0600" }
+    - { path: "{{ kibana_certs_path }}/kibana.crt", mode: "0644" }
+
+- name: Remove temporary files
+  file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - "{{ kibana_certs_path }}/kibana.csr"
+    - "{{ kibana_certs_path }}/kibana.conf"
+
+- name: Verify Kibana certificate
+  shell: |
+    openssl x509 -in {{ kibana_certs_path }}/kibana.crt -noout -text | grep -A 5 "Subject Alternative Name"
+  register: kibana_cert_sans
+  changed_when: false
+  failed_when: false
+
+- name: Display SSL setup status
+  debug:
+    msg: |
+      ✅ Kibana SSL certificates created
+      - CA: {{ kibana_certs_path }}/ca.crt
+      - Key: {{ kibana_certs_path }}/kibana.key
+      - Certificate: {{ kibana_certs_path }}/kibana.crt
+      - SANs: {{ 'OK' if kibana_cert_sans.rc == 0 else 'No SANs found' }}

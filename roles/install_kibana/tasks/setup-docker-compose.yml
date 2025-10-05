@@ -1,0 +1,38 @@
+---
+# Generate and validate Docker Compose configuration for Kibana
+- name: Generate Docker Compose file for Kibana
+  template:
+    src: docker-compose-kibana.yml.j2
+    dest: "{{ kibana_compose_path }}"
+    mode: "0644"
+    owner: root
+    group: root
+    backup: yes
+  register: kibana_compose_config
+
+- name: Check docker-compose file exists
+  stat:
+    path: "{{ kibana_compose_path }}"
+  register: kibana_compose_file_check
+
+- name: Validate docker-compose syntax
+  shell: cd {{ kibana_docker_path }} && docker-compose config > /dev/null
+  register: kibana_compose_validation
+  when: kibana_compose_file_check.stat.exists
+  changed_when: false
+
+- name: Fail if docker-compose validation fails
+  fail:
+    msg: |
+      Docker-compose file validation failed!
+      Error: {{ kibana_compose_validation.stderr }}
+  when: 
+    - kibana_compose_file_check.stat.exists
+    - kibana_compose_validation.rc != 0
+
+- name: Display Docker Compose setup status
+  debug:
+    msg: |
+      ✅ Kibana Docker Compose configuration ready
+      - Compose file: {{ kibana_compose_path }}
+      - Validation: {{ 'Passed' if kibana_compose_validation.rc == 0 else 'Failed' }}

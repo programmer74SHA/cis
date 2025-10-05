@@ -1,0 +1,18 @@
+---
+# Initialize Kibana deployment variables
+- name: Set install_kibana fact
+  set_fact:
+    install_kibana: "{{ hostvars[inventory_hostname].install_kibana | default(false) }}"
+
+- name: Set Kibana SSL enabled fact
+  set_fact:
+    kibana_enable_ssl: true
+
+- name: Display Kibana configuration
+  debug:
+    msg: |
+      Kibana Configuration:
+      - Install Kibana: {{ install_kibana }}
+      - Enable SSL: {{ kibana_enable_ssl }}
+      - Host: {{ inventory_hostname }}
+      - Node hostname: {{ hostvars[inventory_hostname].node_hostname }}

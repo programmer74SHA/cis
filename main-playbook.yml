@@ -2,16 +2,16 @@
   hosts: all
   roles:
     - pre_checks
-    - add-new-node
+    # - add-new-node
     # - deploy_apt_repository 
     # - install_dependencies 
-    - install_elastic 
+    # - install_elastic 
     - install_kibana
     # - setup_shell_scripts
     # - deploy_nba_node
     # - setup_nfs
     # - setup_ntp_server
-    - integrations_server
+    # - integrations_server
     # - elasticsearch_artifacts
     # - elasticsearch-maps-server
     # - install_logstash
@@ -23,7 +23,7 @@
     # - config_elk_templates
     # - install_kaf
     # - install_elastic_agent
-    # - copy_fleet
+    - enroll_fleet
     # - health_check
     # - hardening
     # - versioning

@@ -25,7 +25,7 @@ services:
       - "ELASTICSEARCH_HOSTS=https://{{ es_node.name }}.{{ top_level_domain }}:{{ es_port }}"
       - "ELASTICSEARCH_USERNAME=kibana_system"
       - "ELASTICSEARCH_PASSWORD={{ kibana_elasticsearch_password }}"
-      - "ELASTICSEARCH_SSL_CERTIFICATEAUTHORITIES=/usr/share/kibana/config/certs/ca/ca.crt"
+      - "ELASTICSEARCH_SSL_CERTIFICATEAUTHORITIES=/usr/share/kibana/config/certs/ca.crt"
       - "ELASTICSEARCH_SSL_VERIFICATIONMODE=none"
       - "ELASTICSEARCH_PINGTIMEOUT=30000"
       - "ELASTICSEARCH_REQUESTTIMEOUT=120000"
@@ -45,7 +45,16 @@ services:
       - "{{ kibana_data_path }}:/usr/share/kibana/data:Z"
       - "{{ kibana_logs_path }}:/usr/share/kibana/logs:Z"
       - "{{ kibana_config_path }}/kibana.yml:/usr/share/kibana/config/kibana.yml:ro,Z"
-      - "{{ certs_base_path }}:/usr/share/kibana/config/certs:ro,Z"
+      
+{% if kibana_enable_ssl | default(true) %}
+      # SSL certificates for Kibana server
+      - "{{ kibana_certs_path }}/kibana.key:/usr/share/kibana/config/certs/kibana.key:ro,Z"
+      - "{{ kibana_certs_path }}/kibana.crt:/usr/share/kibana/config/certs/kibana.crt:ro,Z"
+      - "{{ kibana_certs_path }}/ca.crt:/usr/share/kibana/config/certs/ca.crt:ro,Z"
+{% else %}
+      # CA certificate for Elasticsearch connection
+      - "{{ certs_base_path }}/ca/ca.crt:/usr/share/kibana/config/certs/ca.crt:ro,Z"
+{% endif %}
 
     healthcheck:
       test: 

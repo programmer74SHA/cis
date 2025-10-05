@@ -1,21 +1,29 @@
-# roles/install_kibana/templates/kibana.yml.j2
-# Kibana Configuration
 # Generated: {{ ansible_date_time.iso8601 }}
 
-# Server
+# Server Configuration
 server.host: "0.0.0.0"
 server.port: 5601
 server.name: "{{ inventory_hostname }}-kibana"
+server.publicBaseUrl: "https://{{ hostvars[inventory_hostname].node_hostname }}:5601"
 
-# SSL Configuration
+# SSL/TLS Configuration for Kibana Server
+{% if kibana_enable_ssl | default(true) %}
 server.ssl.enabled: true
 server.ssl.key: /usr/share/kibana/config/certs/kibana.key
 server.ssl.certificate: /usr/share/kibana/config/certs/kibana.crt
+server.ssl.certificateAuthorities: [/usr/share/kibana/config/certs/ca.crt]
+{% else %}
+server.ssl.enabled: false
+{% endif %}
 
-# Elasticsearch
-elasticsearch.hosts: ["{{ kibana_elasticsearch_hosts }}"]
+# Elasticsearch Connection
+{% set es_node = hostvars[inventory_hostname].elasticsearch_nodes[0] if hostvars[inventory_hostname].elasticsearch_nodes is defined else {} %}
+{% set es_port = (es_http_base_port | int) + (es_node.port_offset | int) if es_node else 9200 %}
+elasticsearch.hosts: ["https://{{ es_node.name }}.{{ top_level_domain }}:{{ es_port }}"]
+
+# Elasticsearch SSL Configuration
 elasticsearch.ssl.certificateAuthorities: [/usr/share/kibana/config/certs/ca.crt]
-elasticsearch.ssl.verificationMode: certificate
+elasticsearch.ssl.verificationMode: none
 
 {% if es_service_token is defined %}
 # Service account token authentication

@@ -1,0 +1,207 @@
+---
+- name: Display Kibana deployment banner
+  debug:
+    msg: |
+      🐳 Kibana Docker Deployment
+      ===========================
+      Host: {{ inventory_hostname }}
+      Network: {{ docker_network_name }}
+      Port: 5601
+      SSL: {{ 'Enabled' if kibana_enable_ssl else 'Disabled' }}
+
+- name: Kibana Docker Deployment
+  block:
+    # Pre-deployment validation
+    - name: Verify Docker network exists
+      shell: docker network ls --format "{{ '{{' }}.Name{{ '}}' }}" | grep -x "{{ docker_network_name }}"
+      register: network_exists
+      changed_when: false
+      failed_when: network_exists.rc != 0
+
+    - name: Check if Docker Compose file exists and is valid
+      stat:
+        path: "{{ kibana_compose_path }}"
+      register: compose_file_exists
+
+    - name: Fail if Docker Compose file is missing
+      fail:
+        msg: "Docker Compose file not found at {{ kibana_compose_path }}"
+      when: not compose_file_exists.stat.exists
+
+    - name: Validate Docker Compose syntax
+      shell: cd {{ kibana_docker_path }} && docker-compose config > /dev/null
+      register: compose_syntax_check
+      changed_when: false
+
+    - name: Pre-deployment configuration file verification
+      stat:
+        path: "{{ kibana_config_path }}/kibana.yml"
+      register: pre_deploy_config_check
+
+    - name: Display pre-deployment file status
+      debug:
+        msg: |
+          📁 Pre-deployment File Verification:
+          ====================================
+          - kibana.yml: {{ 'OK' if pre_deploy_config_check.stat.exists else 'MISSING' }}
+          - docker-compose.yml: {{ 'OK' if compose_file_exists.stat.exists else 'MISSING' }}
+
+    - name: Fail if configuration file is missing
+      fail:
+        msg: |
+          ❌ Required configuration file missing: kibana.yml
+          Path: {{ kibana_config_path }}/kibana.yml
+          Cannot proceed with Docker deployment.
+      when: not pre_deploy_config_check.stat.exists
+
+    # Stop existing containers
+    - name: Stop existing Kibana container
+      shell: |
+        cd {{ kibana_docker_path }}
+        if [ -f docker-compose.yml ]; then
+          docker-compose down --timeout 30
+        else
+          echo "No docker-compose.yml found, skipping container stop"
+        fi
+      register: container_stop_result
+      ignore_errors: true
+
+    - name: Display container stop result
+      debug:
+        msg: |
+          🛑 Container Stop Result:
+          {{ container_stop_result.stdout }}
+          {% if container_stop_result.stderr %}
+          Errors: {{ container_stop_result.stderr }}
+          {% endif %}
+
+    - name: Remove any orphaned Kibana containers
+      shell: |
+        if docker ps -a --format "{{ '{{' }}.Names{{ '}}' }}" | grep -q "^kibana-{{ inventory_hostname }}$"; then
+          echo "Removing orphaned container: kibana-{{ inventory_hostname }}"
+          docker rm -f "kibana-{{ inventory_hostname }}" || true
+        fi
+      register: orphan_cleanup
+      changed_when: "'Removing orphaned container' in orphan_cleanup.stdout"
+
+    # Deploy container
+    - name: Start Kibana container using Docker Compose
+      shell: |
+        cd {{ kibana_docker_path }}
+        docker-compose up -d --force-recreate
+      register: kibana_deployment
+      retries: 3
+      delay: 10
+
+    - name: Display deployment output
+      debug:
+        msg: |
+          🚀 Deployment Output:
+          {{ kibana_deployment.stdout }}
+          {% if kibana_deployment.stderr %}
+          Warnings/Errors: {{ kibana_deployment.stderr }}
+          {% endif %}
+
+    # Verify deployment
+    - name: Wait for container to be created
+      pause:
+        seconds: 10
+
+    - name: Check Kibana container status
+      shell: docker ps --filter "name=kibana-{{ inventory_hostname }}" --format "{{ '{{' }}.Status{{ '}}' }}"
+      register: kibana_container_status
+      until: "'Up' in kibana_container_status.stdout"
+      retries: 15
+      delay: 10
+      changed_when: false
+
+    - name: Get detailed container status
+      shell: |
+        echo "=== Kibana Container Status ==="
+        docker ps --filter "name=kibana-{{ inventory_hostname }}" --format "table {{ '{{' }}.Names{{ '}}' }}\t{{ '{{' }}.Status{{ '}}' }}\t{{ '{{' }}.Ports{{ '}}' }}"
+        echo ""
+        echo "=== Recent Logs ==="
+        docker logs --tail 20 "kibana-{{ inventory_hostname }}" 2>&1 || echo "No logs available"
+      register: detailed_status
+      changed_when: false
+
+    - name: Display detailed container status
+      debug:
+        msg: "{{ detailed_status.stdout_lines }}"
+
+    - name: Wait for Kibana to be ready
+      uri:
+        url: "{{ 'https' if kibana_enable_ssl else 'http' }}://127.0.0.1:5601/api/status"
+        method: GET
+        validate_certs: no
+        timeout: 10
+        status_code: [200, 503]
+      register: kibana_health
+      until: kibana_health.status == 200
+      retries: 30
+      delay: 10
+      ignore_errors: true
+
+    - name: Final deployment status
+      debug:
+        msg: |
+          {% if kibana_health.status == 200 %}
+          ✅ Kibana Deployment Successful!
+          =================================
+          Access URL: {{ 'https' if kibana_enable_ssl else 'http' }}://{{ hostvars[inventory_hostname].ansible_host }}:5601
+          Username: elastic
+          Password: [Use your Elasticsearch password]
+          
+          Status: {{ kibana_health.json.status.overall.level | default('Available') if kibana_health.json is defined else 'Running' }}
+          
+          Container: kibana-{{ inventory_hostname }}
+          
+          Useful commands:
+          - Check logs: docker logs kibana-{{ inventory_hostname }}
+          - Check status: docker ps | grep kibana
+          - Restart: cd {{ kibana_docker_path }} && docker-compose restart
+          {% else %}
+          ⚠️  Kibana Deployed but Not Ready
+          ==================================
+          Container Status: {{ kibana_container_status.stdout }}
+          Health Status: {{ kibana_health.status | default('Unknown') }}
+          
+          The container is running but Kibana is still starting up.
+          This may take a few minutes, especially on first start.
+          
+          Monitor progress:
+          - docker logs -f kibana-{{ inventory_hostname }}
+          
+          Check when ready:
+          - curl -k {{ 'https' if kibana_enable_ssl else 'http' }}://127.0.0.1:5601/api/status
+          {% endif %}
+
+  rescue:
+    - name: Handle deployment failure
+      debug:
+        msg: |
+          ❌ Kibana Docker deployment failed!
+          
+          🔍 Troubleshooting Steps:
+          1. Check Docker service:
+             systemctl status docker
+          
+          2. Check container logs:
+             docker logs kibana-{{ inventory_hostname }}
+          
+          3. Check configuration:
+             cat {{ kibana_config_path }}/kibana.yml
+          
+          4. Check Elasticsearch connectivity:
+             curl -k https://{{ hostvars[inventory_hostname].node_hostname }}:{{ (es_http_base_port | default(9200) | int) }}/_cluster/health
+          
+          5. Check docker-compose:
+             cd {{ kibana_docker_path }} && docker-compose config
+          
+          6. Manual restart:
+             cd {{ kibana_docker_path }}
+             docker-compose down
+             docker-compose up -d
+          
+          7. Check disk space:
+             df -h {{ kibana_docker_path }}
