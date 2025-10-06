@@ -1,7 +1,0 @@
-- name: config agent policies
-  block:
-    - name: create fleet server hosts
-      import_tasks: config_fleet_servers_host.yml
-    - name: config agent binary downlaod source in kibana
-      import_tasks: create_agent_binary.yml
-  tags: [simple, cluster]

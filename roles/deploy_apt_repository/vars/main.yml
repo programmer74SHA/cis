@@ -1,0 +1,16 @@
+---
+siem_files_home_directory: '/var/siem'
+Installer_tmp_directory_path: '{{ siem_files_home_directory }}/tmp'
+repository_archive_file_name: 'repo.tar.gz'
+repository_archive_file_source: 'files'
+repository_archive_file_destination: "{{ Installer_tmp_directory_path }}/installer"
+local_repository_directory_path: '{{ siem_files_home_directory }}/apt_repo'
+local_repository_serve_directory_path: '{{ local_repository_directory_path }}/source/repository'
+dependencies_repo_archive_file_name: 'localrepository.tar.gz'
+dependencies_repo_files_destination: '{{ Installer_tmp_directory_path }}/source'
+sf_nginx_configuration_file_destination: "/etc/nginx/conf.d"
+sf_nginx_configuration_template_file_name: "sf_repository.conf.j2"
+sf_nginx_configuration_file_name: "main.conf"
+template_files_source: 'templates'
+apt_sources_list_file_path: '/etc/apt/sources.list'
+main_repository_ip_address: "{{ hostvars[groups['SF'][0]]['ansible_default_ipv4']['address'] }}"

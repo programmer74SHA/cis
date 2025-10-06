@@ -1,0 +1,33 @@
+---
+# Configure agent binary download source in Kibana
+
+- name: Create Agent Binary Download Source in Kibana
+  uri:
+    url: "{{ kibana_address }}/api/fleet/agent_download_sources"
+    method: POST
+    user: "{{ elk_user }}"
+    password: "{{ elk_password }}"
+    body_format: json
+    body:
+      id: "APK-Elastic-Artifacts"
+      name: "APK-Elastic-Artifacts"
+      is_default: false
+      host: "{{ artifact_repository_url }}"
+    headers:
+      Content-Type: application/json
+      kbn-xsrf: "true"
+    validate_certs: no 
+    force_basic_auth: yes
+    status_code: [200, 201, 409]
+  register: agent_binary_output
+  failed_when: agent_binary_output.status not in [200, 201, 409]
+  run_once: true
+
+- name: Display agent binary configuration result
+  debug:
+    msg: |
+      ✅ Agent Binary Download Source Configured
+      ===========================================
+      - Status: {{ 'Configured' if agent_binary_output.status in [200, 201] else 'Already exists' if agent_binary_output.status == 409 else 'Failed' }}
+      - URL: {{ artifact_repository_url }}
+  run_once: true

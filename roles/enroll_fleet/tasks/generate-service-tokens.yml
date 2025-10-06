@@ -1,0 +1,21 @@
+---
+# Generate Elasticsearch service tokens for each Fleet node
+- name: Initialize service tokens dictionary
+  set_fact:
+    fleet_service_tokens: {}
+
+- name: Process each Fleet node for token generation
+  include_tasks: generate-single-token.yml
+  loop: "{{ fleet_nodes }}"
+  loop_control:
+    loop_var: fleet_node
+    label: "{{ fleet_node.name }}"
+
+- name: Display generated tokens summary
+  debug:
+    msg: |
+      ✅ Fleet Service Tokens Generated
+      ==================================
+      {% for node_name, token_info in fleet_service_tokens.items() %}
+      - {{ node_name }}: Token generated successfully
+      {% endfor %}

@@ -1,0 +1,41 @@
+- name: stop map with docker-compose
+  command: docker compose -f {{ ems_compose_file_path }} down
+  tags: update
+
+- name: remove elastic map service compose file
+  file:
+    path: "{{ ems_compose_file_path }}"
+    state: absent
+  tags: update
+
+- name: load elastic mas service image
+  block:
+    - name: Copy Docker image
+      synchronize:
+        src: files/elastic-maps-server-ubi8.tar.gz
+        dest: /var/cache/siem/elastic-maps-server-ubi8.tar.gz
+
+    - name: Load Docker image
+      command: docker load -i /var/cache/siem/elastic-maps-server-ubi8.tar.gz
+      register: ems_load_output
+
+    - name: Extract image ID from docker load output
+      set_fact:
+        loaded_image_id: "{{ (ems_load_output.stdout | regex_search('Loaded image ID: (sha256:[a-f0-9]{64})', '\\1'))[0] | trim }}"
+
+    - name: Tag the loaded Docker image
+      shell: |
+        docker tag {{ loaded_image_id }} {{ ems_docker_image_name }}:{{ ems_docker_image_tag }}
+
+    - name: delete the docker image tmp file
+      file:
+        path: /var/cache/siem/elastic-maps-server-ubi8.tar.gz
+        state: absent
+
+    - name: Copy Docker Compose file
+      template:
+        src: templates/docker-compose.yml.j2
+        dest: "{{ ems_compose_file_path }}"
+
+    - name: start map with docker-compose
+      command: docker compose -f {{ ems_compose_file_path }} up -d

@@ -1,0 +1,54 @@
+---
+# Deploy Fleet servers using Docker Compose
+- name: Display Fleet deployment banner
+  debug:
+    msg: |
+      🐳 Fleet Server Docker Deployment
+      ==================================
+      Host: {{ inventory_hostname }}
+      Fleet Nodes: {{ fleet_nodes | length }}
+
+- name: Deploy each Fleet server
+  include_tasks: deploy-single-fleet.yml
+  loop: "{{ fleet_nodes }}"
+  loop_control:
+    loop_var: fleet_node
+    label: "{{ fleet_node.name }}"
+
+- name: Wait for all Fleet servers to be ready
+  uri:
+    url: "https://{{ hostvars[inventory_hostname].ansible_host }}:{{ fleet_node.port }}/api/status"
+    method: GET
+    validate_certs: no
+    timeout: 10
+    status_code: [200, 401, 404]
+  register: fleet_health
+  until: fleet_health.status in [200, 401, 404]
+  retries: 30
+  delay: 10
+  loop: "{{ fleet_nodes }}"
+  loop_control:
+    loop_var: fleet_node
+    label: "{{ fleet_node.name }}"
+  ignore_errors: true
+
+- name: Display Fleet deployment summary
+  debug:
+    msg: |
+      ✅ Fleet Server Deployment Complete
+      ====================================
+      Host: {{ inventory_hostname }}
+      
+      Fleet Servers:
+      {% for node in fleet_nodes %}
+      - {{ node.name }}:
+        URL: https://{{ hostvars[inventory_hostname].ansible_host }}:{{ node.port }}
+        Container: {{ node.name }}
+        Status: Running
+      {% endfor %}
+      
+      Useful Commands:
+      {% for node in fleet_nodes %}
+      - Check logs: docker logs {{ node.name }}
+      - Restart: cd {{ fleet_base_path }}/{{ node.name }} && docker-compose restart
+      {% endfor %}

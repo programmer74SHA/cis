@@ -1,0 +1,127 @@
+---
+- name: Check if siem user already exists
+  uri:
+    url: "https://{{ hostvars[inventory_hostname].node_hostname }}:{{ (es_http_base_port | default(9200) | int) + (hostvars[inventory_hostname].elasticsearch_nodes[0].port_offset | int) }}/_security/user/siem"
+    method: GET
+    user: "{{ es_api_basic_auth_username | default('elastic') }}"
+    password: "{{ es_api_basic_auth_password }}"
+    force_basic_auth: yes
+    validate_certs: no
+    status_code: [200, 404]
+  register: siem_user_check
+  when: hostvars[inventory_hostname].elasticsearch_nodes is defined
+  ignore_errors: true
+
+- name: Create siem user in Elasticsearch
+  uri:
+    url: "https://{{ hostvars[inventory_hostname].node_hostname }}:{{ (es_http_base_port | default(9200) | int) + (hostvars[inventory_hostname].elasticsearch_nodes[0].port_offset | int) }}/_security/user/siem"
+    method: POST
+    user: "{{ es_api_basic_auth_username | default('elastic') }}"
+    password: "{{ es_api_basic_auth_password }}"
+    force_basic_auth: yes
+    validate_certs: no
+    body_format: json
+    body:
+      password: "{{ es_users.file.siem.password }}"
+      roles: "{{ es_users.file.siem.roles }}"
+      full_name: "SIEM Admin User"
+      email: "siem@apk-siem.local"
+      metadata:
+        created_by: "ansible"
+        created_at: "{{ ansible_date_time.iso8601 }}"
+    headers:
+      Content-Type: "application/json"
+    status_code: [200, 201]
+  register: siem_user_created
+  when: 
+    - hostvars[inventory_hostname].elasticsearch_nodes is defined
+    - siem_user_check.status == 404
+  ignore_errors: true
+
+- name: Update siem user password if user already exists
+  uri:
+    url: "https://{{ hostvars[inventory_hostname].node_hostname }}:{{ (es_http_base_port | default(9200) | int) + (hostvars[inventory_hostname].elasticsearch_nodes[0].port_offset | int) }}/_security/user/siem/_password"
+    method: POST
+    user: "{{ es_api_basic_auth_username | default('elastic') }}"
+    password: "{{ es_api_basic_auth_password }}"
+    force_basic_auth: yes
+    validate_certs: no
+    body_format: json
+    body:
+      password: "{{ es_users.file.siem.password }}"
+    headers:
+      Content-Type: "application/json"
+    status_code: [200]
+  register: siem_password_updated
+  when: 
+    - hostvars[inventory_hostname].elasticsearch_nodes is defined
+    - siem_user_check.status == 200
+  ignore_errors: true
+
+- name: Display siem user creation status
+  debug:
+    msg: |
+      {% if siem_user_created.status is defined %}
+      ✅ SIEM User Created Successfully
+      ================================
+      - Username: siem
+      - Password: {{ es_users.file.siem.password }}
+      - Roles: {{ es_users.file.siem.roles | join(', ') }}
+      - Status: {{ siem_user_created.status }}
+      {% elif siem_password_updated.status is defined %}
+      ✅ SIEM User Password Updated
+      ============================
+      - Username: siem
+      - Status: {{ siem_password_updated.status }}
+      {% elif siem_user_check.status == 200 %}
+      ℹ️  SIEM User Already Exists
+      ===========================
+      - Username: siem
+      - No changes made
+      {% else %}
+      ⚠️  SIEM User Status Unknown
+      ===========================
+      - Check Elasticsearch logs for details
+      {% endif %}
+      
+      Credentials for config_fleet_settings:
+      - elk_user: siem
+      - elk_password: {{ es_users.file.siem.password }}
+
+- name: Create other file-based users
+  uri:
+    url: "https://{{ hostvars[inventory_hostname].node_hostname }}:{{ (es_http_base_port | default(9200) | int) + (hostvars[inventory_hostname].elasticsearch_nodes[0].port_offset | int) }}/_security/user/{{ item.key }}"
+    method: POST
+    user: "{{ es_api_basic_auth_username | default('elastic') }}"
+    password: "{{ es_api_basic_auth_password }}"
+    force_basic_auth: yes
+    validate_certs: no
+    body_format: json
+    body:
+      password: "{{ item.value.password }}"
+      roles: "{{ item.value.roles }}"
+      full_name: "{{ item.key | title }} User"
+      email: "{{ item.key }}@apk-siem.local"
+      metadata:
+        created_by: "ansible"
+        created_at: "{{ ansible_date_time.iso8601 }}"
+    headers:
+      Content-Type: "application/json"
+    status_code: [200, 201, 409]
+  loop: "{{ es_users.file | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+  when: 
+    - hostvars[inventory_hostname].elasticsearch_nodes is defined
+    - item.key != 'siem'  # Already handled above
+  ignore_errors: true
+  register: other_users_created
+
+- name: Display all users creation status
+  debug:
+    msg: |
+      ✅ Elasticsearch Users Setup Complete
+      ====================================
+      {% for result in other_users_created.results | default([]) %}
+      - {{ result.item.key }}: {{ 'Created/Updated' if result.status in [200, 201] else 'Already exists' if result.status == 409 else 'Failed' }}
+      {% endfor %}

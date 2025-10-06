@@ -1,24 +1,80 @@
-- name: Generate docker compose
-  block:
-    - name: load elastic agent docker image
-      import_tasks: load_docker_image.yml
-      when: "'SF' in group_names or 'COLLECTOR' in group_names or (('LB' not in groups or groups['LB'] | length == 0) and inventory_hostname in groups['SF'])"
-      tags: [simple, add-collector]
-    
-    - name: render docker compose
-      import_tasks: render_docker_compose.yml
-      when: "'SF' in group_names"
-      tags: simple
+---
+# Merged fleet installation role with modular configuration
 
-    - name: copy docker compose
-      import_tasks: copy_docker_compose.yml
-
-- name: Generate docker compose on cluster mode
+- name: "🚀 Fleet Server Installation and Configuration"
   block:
-    - name: load elastic agent docker image
-      import_tasks: load_docker_image.yml
-    
-    - name: render docker compose
-      import_tasks: render_docker_compose.yml
-  when: "'SF' in group_names and groups['SF'] | length == 1"
-  tags: [cluster, update]
+    # Initialize deployment variables
+    - name: Initialize Fleet variables
+      include_tasks: init-variables.yml
+
+    # Skip hosts without Fleet configuration
+    - name: Skip hosts without Fleet configuration
+      meta: end_host
+      when: 
+        - not has_fleet_nodes
+        - "'COLLECTOR' not in group_names"
+
+    # Create directory structure
+    - name: Create Fleet directory structure
+      include_tasks: create-directories.yml
+      when: has_fleet_nodes
+
+    # Load Docker image
+    - name: Load Elastic Agent Docker image
+      include_tasks: load_docker_image.yml
+      when: has_fleet_nodes or 'COLLECTOR' in group_names
+
+    # Generate and manage service tokens
+    - name: Generate Elasticsearch service tokens for Fleet
+      include_tasks: generate-service-tokens.yml
+      when: has_fleet_nodes
+
+    # Register Fleet servers in Kibana (run_once and delegate_to are inside the task file)
+    - name: Register Fleet servers in Kibana
+      include_tasks: register-fleet-servers.yml
+      when: has_fleet_nodes
+
+    # Configure agent binary download source (run_once is inside the task file)
+    - name: Configure agent binary download source
+      include_tasks: configure-agent-binary.yml
+      when: "'BDA' in group_names"
+
+    # Generate Docker Compose configurations
+    - name: Generate Fleet Docker Compose configurations
+      include_tasks: generate-docker-compose.yml
+      when: has_fleet_nodes
+
+    # Deploy Fleet servers
+    - name: Deploy Fleet servers using Docker Compose
+      include_tasks: fleet-docker-deploy.yml
+      when: has_fleet_nodes
+
+  rescue:
+    - name: Handle Fleet installation failure
+      debug:
+        msg: |
+          ❌ Fleet server installation failed on {{ inventory_hostname }}!
+          
+          🔍 Diagnostic Steps:
+          1. Check configuration files: ls -la {{ fleet_base_path }}/*/
+          2. Check docker-compose syntax: cd {{ fleet_base_path }}/[fleet-name] && docker-compose config
+          3. Check container logs: docker logs [fleet-container-name]
+          4. Check Elasticsearch connectivity: curl -k https://{{ hostvars[inventory_hostname].node_hostname }}:9200
+          5. Check service tokens: cat /etc/elasticsearch/service_tokens
+          6. Check system resources: free -h && df -h {{ fleet_base_path }}
+          
+          Common Issues:
+          - Elasticsearch not accessible: Ensure ES is running and accessible
+          - Service token generation failed: Check ES service is running
+          - Kibana not accessible: Verify Kibana is up and credentials are correct
+          - Docker network issues: Ensure docker network {{ docker_network_name }} exists
+          
+          Debug Commands:
+          - List containers: docker ps -a
+          - Check network: docker network inspect {{ docker_network_name }}
+          - Test ES: curl -k -u elastic:password https://localhost:9200
+          - Test Kibana: curl -k https://localhost:5601/api/status
+
+  when: 
+    - has_fleet_nodes or 'COLLECTOR' in group_names
+  tags: [cluster, simple, fleet, enroll_fleet]

@@ -1,0 +1,58 @@
+---
+# Deploy a single Fleet server container
+- name: Stop existing {{ fleet_node.name }} container
+  shell: |
+    cd {{ fleet_base_path }}/{{ fleet_node.name }}
+    if [ -f docker-compose.yml ]; then
+      docker-compose down --timeout 30 2>&1 || true
+    fi
+    # Also try to remove container directly
+    docker rm -f {{ fleet_node.name }} 2>&1 || true
+  register: container_stop
+  ignore_errors: true
+
+- name: Display stop result for {{ fleet_node.name }}
+  debug:
+    msg: |
+      🛑 Stopping {{ fleet_node.name }}:
+      {{ container_stop.stdout }}
+
+- name: Start {{ fleet_node.name }} using Docker Compose
+  shell: |
+    cd {{ fleet_base_path }}/{{ fleet_node.name }}
+    docker-compose up -d --force-recreate
+  register: fleet_deployment
+  retries: 3
+  delay: 10
+
+- name: Display deployment output for {{ fleet_node.name }}
+  debug:
+    msg: |
+      🚀 Deployment Output for {{ fleet_node.name }}:
+      {{ fleet_deployment.stdout }}
+      {% if fleet_deployment.stderr %}
+      Warnings/Errors: {{ fleet_deployment.stderr }}
+      {% endif %}
+
+- name: Wait for {{ fleet_node.name }} container to be running
+  shell: docker ps --filter "name={{ fleet_node.name }}" --format "{{ '{{' }}.Status{{ '}}' }}"
+  register: container_status
+  until: "'Up' in container_status.stdout"
+  retries: 15
+  delay: 10
+  changed_when: false
+
+- name: Get {{ fleet_node.name }} container logs
+  shell: docker logs --tail 20 {{ fleet_node.name }} 2>&1
+  register: container_logs
+  changed_when: false
+
+- name: Display {{ fleet_node.name }} status
+  debug:
+    msg: |
+      ✅ {{ fleet_node.name }} Deployed Successfully
+      =============================================
+      - Container Status: {{ container_status.stdout }}
+      - Port: {{ fleet_node.port }}
+      - Recent Logs:
+      {{ container_logs.stdout_lines | join('\n') }}

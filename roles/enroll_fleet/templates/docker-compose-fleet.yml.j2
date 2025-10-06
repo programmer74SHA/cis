@@ -1,0 +1,69 @@
+# Docker Compose configuration for Fleet Server
+# Generated: {{ ansible_date_time.iso8601 }}
+
+version: "3.8"
+
+services:
+  {{ fleet_node.name }}:
+    image: "{{ docker_image_name }}:{{ docker_image_tag }}"
+    container_name: "{{ fleet_node.name }}"
+    hostname: "{{ fleet_node.name }}.{{ top_level_domain }}"
+    restart: unless-stopped
+    user: root
+    
+    networks:
+      - {{ docker_network_name }}
+    
+    extra_hosts:
+{% for host in groups['ELASTICSEARCH'] %}
+      - "{{ hostvars[host].node_hostname }}:{{ hostvars[host].ansible_host }}"
+{% endfor %}
+    
+    environment:
+      # Fleet Server Configuration
+      - FLEET_SERVER_ENABLE=true
+      - FLEET_SERVER_ELASTICSEARCH_HOST={{ fleet_node.elasticsearch_host | default('https://' + hostvars[inventory_hostname].node_hostname + ':9200') }}
+      - FLEET_SERVER_ELASTICSEARCH_CA=/opt/certs/elasticsearch-ca.crt
+      - FLEET_SERVER_SERVICE_TOKEN={{ service_token }}
+      - FLEET_SERVER_ELASTICSEARCH_CA_TRUSTED_FINGERPRINT={{ cert_fingerprint }}
+      - FLEET_SERVER_POLICY_ID={{ fleet_node.policy_id | default(fleet_default_policy_id) }}
+      - FLEET_INSECURE=true
+      - FLEET_SERVER_PORT={{ fleet_node.port }}
+      - FLEET_ENROLE=1
+      
+      # Additional Configuration
+      - FLEET_SERVER_HOST=0.0.0.0
+      - FLEET_SERVER_CERT=/opt/certs/fleet-server.crt
+      - FLEET_SERVER_CERT_KEY=/opt/certs/fleet-server.key
+    
+    volumes:
+      # Elasticsearch CA certificate
+      - {{ certs_base_path }}/ca/ca.crt:/opt/certs/elasticsearch-ca.crt:ro
+      
+      # Fleet server certificates (if needed)
+      # - {{ fleet_base_path }}/certs/fleet-server.crt:/opt/certs/fleet-server.crt:ro
+      # - {{ fleet_base_path }}/certs/fleet-server.key:/opt/certs/fleet-server.key:ro
+    
+    ports:
+      - "{{ hostvars[inventory_hostname].ansible_host }}:{{ fleet_node.port }}:{{ fleet_node.port }}"
+    
+    healthcheck:
+      test: 
+        - "CMD-SHELL"
+        - "curl -f http://127.0.0.1:{{ fleet_node.port }}/api/status || exit 1"
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 512M
+
+networks:
+  {{ docker_network_name }}:
+    name: {{ docker_network_name }}
+    external: true

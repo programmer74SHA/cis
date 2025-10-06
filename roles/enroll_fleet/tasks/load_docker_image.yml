@@ -1,29 +1,84 @@
-- name: load the elastic-agent docker image
+---
+# Load Elastic Agent Docker image for Fleet server
+
+- name: Load the elastic-agent docker image
   block:
     - name: Create directory for fleet server docker images
       file:
-        path: "{{ fleet_server_tmp_dir }}"
+        path: "{{ fleet_tmp_path }}"
         state: directory
+        mode: "0755"
 
-    - name: Copy docker images
+    - name: Copy docker image file
       synchronize:
         src: files/elastic-agent.tar.gz
-        dest: "{{ fleet_server_tmp_dir }}/elastic-agent.tar.gz"
+        dest: "{{ fleet_tmp_path }}/elastic-agent.tar.gz"
+      when: not (ansible_check_mode | default(false))
 
-    - name: Load docker images
-      command: docker load -i {{ fleet_server_tmp_dir }}/elastic-agent.tar.gz
+    - name: Check if image file exists
+      stat:
+        path: "{{ fleet_tmp_path }}/elastic-agent.tar.gz"
+      register: image_file_check
+
+    - name: Load docker image
+      command: docker load -i {{ fleet_tmp_path }}/elastic-agent.tar.gz
       register: docker_load_output
+      when: 
+        - image_file_check.stat.exists
+        - not (ansible_check_mode | default(false))
 
     - name: Extract image ID from docker load output
       set_fact:
         loaded_image_id: "{{ (docker_load_output.stdout | regex_search('Loaded image ID: (sha256:[a-f0-9]{64})', '\\1'))[0] | trim }}"
+      when: 
+        - docker_load_output is defined
+        - docker_load_output.stdout is defined
+        - "'Loaded image ID:' in docker_load_output.stdout"
+
+    - name: Extract image name from docker load output (alternative)
+      set_fact:
+        loaded_image_name: "{{ (docker_load_output.stdout | regex_search('Loaded image: (.+)', '\\1'))[0] | trim }}"
+      when: 
+        - docker_load_output is defined
+        - docker_load_output.stdout is defined
+        - "'Loaded image:' in docker_load_output.stdout"
+        - loaded_image_id is not defined
 
     - name: Tag the loaded Docker image
       shell: |
+        {% if loaded_image_id is defined %}
         docker tag {{ loaded_image_id }} {{ docker_image_name }}:{{ docker_image_tag }}
+        {% elif loaded_image_name is defined %}
+        docker tag {{ loaded_image_name }} {{ docker_image_name }}:{{ docker_image_tag }}
+        {% else %}
+        echo "Image already tagged or no tag needed"
+        {% endif %}
+      register: tag_result
+      when: 
+        - not (ansible_check_mode | default(false))
+        - loaded_image_id is defined or loaded_image_name is defined
+      changed_when: "'Image already tagged' not in tag_result.stdout"
 
-    - name: remove the docker image tmp file
+    - name: Remove the docker image tmp file
       file:
-        path: "{{ fleet_server_tmp_dir }}/elastic-agent.tar.gz"
+        path: "{{ fleet_tmp_path }}/elastic-agent.tar.gz"
         state: absent
+      when: 
+        - not (ansible_check_mode | default(false))
+        - docker_load_output is defined
 
+    - name: Display image loading status
+      debug:
+        msg: |
+          ✅ Elastic Agent Docker Image Loaded
+          =====================================
+          {% if docker_load_output is defined and docker_load_output.stdout is defined %}
+          - Load Output: {{ docker_load_output.stdout }}
+          {% endif %}
+          {% if loaded_image_id is defined %}
+          - Image ID: {{ loaded_image_id }}
+          {% elif loaded_image_name is defined %}
+          - Image Name: {{ loaded_image_name }}
+          {% endif %}
+          - Tagged As: {{ docker_image_name }}:{{ docker_image_tag }}
+          - Temp File Removed: Yes

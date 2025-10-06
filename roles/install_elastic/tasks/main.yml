@@ -54,9 +54,18 @@
       include_tasks: elasticsearch-docker-deploy.yml
       when: has_elasticsearch_nodes
 
+    # Activate License
     - name: Active License
       include_tasks: x-pack-activation.yml
       when: has_elasticsearch_nodes
+
+    # Create SIEM user and other file-based users (ADDED)
+    - name: Create SIEM user and other Elasticsearch users
+      include_tasks: create-siem-user.yml
+      when: 
+        - has_elasticsearch_nodes
+        - "'BDA' in group_names"  # Only run on BDA node to avoid duplicates
+      tags: [create-users]
 
   rescue:
     - name: Handle installation failure

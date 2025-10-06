@@ -2,10 +2,10 @@
   hosts: all
   roles:
     - pre_checks
-    # - add-new-node
+    - add-new-node
     # - deploy_apt_repository 
     # - install_dependencies 
-    # - install_elastic 
+    - install_elastic 
     - install_kibana
     # - setup_shell_scripts
     # - deploy_nba_node

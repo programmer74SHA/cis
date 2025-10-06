@@ -1,0 +1,7 @@
+---
+# vars file for integrations_server
+integrations_server_image_name: "registry.apk-group.net/apksiem/package-registry/distribution"
+integrations_server_image_tag: "8.18.2"
+
+integrations_server_folder: /usr/share/siem/integration
+integrations_server_compose_path: "{{ integrations_server_folder }}/docker-compose.yml"

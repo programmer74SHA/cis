@@ -1,0 +1,67 @@
+---
+# roles/enroll_fleet/tasks/register-fleet-servers.yml
+# Register Fleet servers in Kibana (runs once from BDA)
+
+- name: Gather Fleet server information from all hosts
+  set_fact:
+    all_fleet_servers: []
+  run_once: true
+  delegate_to: "{{ groups['BDA'][0] }}"
+
+- name: Build Fleet server list from all hosts
+  set_fact:
+    all_fleet_servers: "{{ all_fleet_servers + hostvars[item].fleet_nodes | default([]) | map('combine', {'hostname': hostvars[item].node_hostname, 'ip': hostvars[item].ansible_host}) | list }}"
+  loop: "{{ groups['all'] }}"
+  when: hostvars[item].fleet_nodes is defined
+  run_once: true
+  delegate_to: "{{ groups['BDA'][0] }}"
+
+- name: Display Fleet servers to register
+  debug:
+    msg: |
+      📋 Fleet Servers to Register in Kibana:
+      ========================================
+      {% for server in all_fleet_servers %}
+      - {{ server.name }}: https://{{ server.ip }}:{{ server.port }}
+      {% endfor %}
+  run_once: true
+  delegate_to: "{{ groups['BDA'][0] }}"
+
+- name: Register each Fleet server in Kibana
+  uri:
+    url: "{{ kibana_address }}/api/fleet/fleet_server_hosts"
+    method: POST
+    body_format: json
+    body:
+      id: "{{ server.name }}-fleet-server"
+      name: "{{ server.name }}-fleet-server"
+      host_urls: 
+        - "https://{{ server.ip }}:{{ server.port }}"
+    headers:
+      Content-Type: application/json
+      kbn-xsrf: "true"
+    user: "{{ elk_user }}"
+    password: "{{ elk_password }}"
+    validate_certs: no
+    force_basic_auth: yes
+    status_code: [200, 201, 409]
+  register: fleet_registration
+  loop: "{{ all_fleet_servers }}"
+  loop_control:
+    loop_var: server
+    label: "{{ server.name }}"
+  failed_when: 
+    - fleet_registration.status not in [200, 201, 409]
+  run_once: true
+  delegate_to: "{{ groups['BDA'][0] }}"
+
+- name: Display registration results
+  debug:
+    msg: |
+      ✅ Fleet Server Registration Complete
+      ======================================
+      {% for result in fleet_registration.results %}
+      - {{ result.server.name }}: {{ 'Registered' if result.status in [200, 201] else 'Already exists' if result.status == 409 else 'Failed' }}
+      {% endfor %}
+  run_once: true
+  delegate_to: "{{ groups['BDA'][0] }}"

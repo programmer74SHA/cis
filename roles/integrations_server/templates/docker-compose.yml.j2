@@ -1,0 +1,18 @@
+version: "3.8" 
+services:
+  elastic-epr:
+    image: {{ integrations_server_image_name }}:{{ integrations_server_image_tag }}
+    restart: always 
+    ports:
+      - "127.0.0.1:8443:8443"
+    environment:
+      EPR_ADDRESS: 0.0.0.0:8443
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8443/health"]
+      interval: 30s
+      retries: 7
+      start_period: 700s
+      timeout: 10s
+networks:
+  elastic:
+    external: true

@@ -1,0 +1,34 @@
+---
+# Create Fleet directory structure
+- name: Create base Fleet directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop:
+    - "{{ fleet_base_path }}"
+    - "{{ fleet_tmp_path }}"
+
+- name: Create node-specific directories
+  file:
+    path: "{{ fleet_base_path }}/{{ node.name }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop: "{{ fleet_nodes }}"
+  loop_control:
+    loop_var: node
+    label: "{{ node.name }}"
+
+- name: Display directory creation status
+  debug:
+    msg: |
+      ✅ Fleet directories created:
+      - Base: {{ fleet_base_path }}
+      - Temp: {{ fleet_tmp_path }}
+      {% for node in fleet_nodes %}
+      - Node: {{ fleet_base_path }}/{{ node.name }}
+      {% endfor %}

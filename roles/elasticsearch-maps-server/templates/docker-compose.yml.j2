@@ -1,0 +1,19 @@
+version: '3'
+
+services:
+  elastic-maps-server:
+    image: {{ ems_docker_image_name }}:{{ ems_docker_image_tag }}
+    restart: always
+    hostname: elastic-maps-server
+    ports:
+      - 8082:8082
+    volumes:
+      - ./elastic-maps-server.yml:/usr/src/app/server/config/elastic-maps-server.yml
+      - /var/lib/kibana/certs/siem_elk8.crt:/usr/share/siem/map-elastic/http_ca.crt
+      - ./certs:/certs
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--cacert", "/certs/ca.crt","--insecure", "https://{{ ansible_default_ipv4.address }}:8082"]
+      interval: 30s
+      retries: 6
+      start_period: 300s
+      timeout: 10s

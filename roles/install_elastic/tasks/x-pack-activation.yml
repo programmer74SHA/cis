@@ -1,0 +1,24 @@
+---
+- name: Activate ES license (with security authentication)
+  uri:
+    method: PUT
+    url: "https://{{ hostvars[groups['ELASTICSEARCH'][0]].ansible_host }}:{{ (es_http_base_port | int) + (hostvars[groups['ELASTICSEARCH'][0]].elasticsearch_nodes[0].port_offset | int) }}/_license?acknowledge=true"
+    user: "{{ es_api_basic_auth_username | default(omit) }}"
+    password: "{{ es_api_basic_auth_password | default(omit) }}"
+    body_format: json
+    body: "{{ es_xpack_license }}"
+    return_content: yes
+    force_basic_auth: yes
+    validate_certs: "{{ es_validate_certs }}"
+  register: license_activated
+  run_once: true
+  delegate_to: localhost
+  failed_when: >
+    license_activated.status != 200 or
+    license_activated.json.license_status is not defined or
+    license_activated.json.license_status != 'valid'
+
+- name: License activation result
+  debug: 
+    msg: "{{ license_activated }}"
+  run_once: true

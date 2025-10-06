@@ -1,0 +1,24 @@
+---
+# Initialize Fleet deployment variables
+- name: Set Fleet nodes fact
+  set_fact:
+    fleet_nodes: "{{ hostvars[inventory_hostname].fleet_nodes | default([]) }}"
+
+- name: Set has_fleet_nodes fact
+  set_fact:
+    has_fleet_nodes: "{{ (hostvars[inventory_hostname].fleet_nodes | default([])) | length > 0 }}"
+
+- name: Display Fleet configuration
+  debug:
+    msg: |
+      Fleet Configuration:
+      - Install Fleet: {{ has_fleet_nodes }}
+      - Number of Fleet nodes: {{ fleet_nodes | length }}
+      - Host: {{ inventory_hostname }}
+      - Node hostname: {{ hostvars[inventory_hostname].node_hostname }}
+      {% if has_fleet_nodes %}
+      Fleet Nodes:
+      {% for node in fleet_nodes %}
+      - {{ node.name }}: Port {{ node.port }}, Policy: {{ node.policy_id }}
+      {% endfor %}
+      {% endif %}

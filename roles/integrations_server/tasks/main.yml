@@ -1,0 +1,49 @@
+---
+- name: "Update integration server"
+  block:
+    - name: stop integration server container
+      command: docker compose -f {{ integrations_server_compose_path  }} down
+
+    - name: remove integration directory
+      file:
+        path: "{{ integrations_server_folder  }}"
+        state: absent
+
+  tags: update
+  when: "'BDA' in group_names"
+
+- name: "Run this module just on BDA"
+  block:
+    - name: Create siem cache directory
+      file:
+        path: /var/cache/siem
+        state: directory
+
+    - name: Create integration directory
+      file:
+        path: "{{ integrations_server_folder }}"
+        state: directory
+
+    - name: Copy Docker image
+      synchronize:
+        src: files/distribution.tar.gz
+        dest: /var/cache/siem/distribution.tar.gz
+
+    - name: Load Docker image
+      command: docker load -i /var/cache/siem/distribution.tar.gz
+
+    - name: remove the tmp docker image file
+      file:
+        path: /var/cache/siem/elastic-maps-server-ubi8.tar.gz
+        state: absent
+
+    - name: Copy Docker Compose file
+      template:
+        src: templates/docker-compose.yml.j2
+        dest: "{{ integrations_server_compose_path }}"
+
+    - name: up docker-compose
+      command: docker compose -f {{ integrations_server_compose_path  }} up -d
+
+  when: "'BDA' in group_names"
+  tags: [cluster, simple, update]
