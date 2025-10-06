@@ -140,3 +140,6 @@ es_api_uri: "{{ es_api_scheme }}://{{ es_api_host }}:{{ es_api_port }}"
 es_security_api: "_security"
 es_license_api: "_license"
 es_api_sleep: 15
+
+# X-pack License
+es_xpack_license: '{"license":{"uid":"6e57906b-a8d1-4c1f-acb7-73a16edc3934","type":"enterprise","issue_date_in_millis":1523456691721,"expiry_date_in_millis":2838816691721,"max_nodes":null,"max_resource_units":50,"issued_to":"rest-test","issuer":"elasticsearch","signature":"AAAABQAAAA0sKPJdf9T6DItbXVJKAAAAIAo5/x6hrsGh1GqqrJmy4qgmEC7gK0U4zQ6q5ZEMhm4jAAABAKFCHrix7w/xPG14+wdhld1RmphDmXmHfL1xeuI33Ahr1mOUYZ30eR6GZuh7CnK8BQhfq+z63lgctJepWlvwDSgkOvXWLHrJun7YSCrzz1bism0ZHWw7Swb9DO7vePomVBo/Hm9+eX0pV4/cFQNMmbFaX11tqJZYBEO6sNASVAFL7A1ZcVoB2evweGU9pUQYvFvmyzzySf99miDo3NH0XYdownEdtoNgFfmqa3+koCP7onmRZ1h9jhsDOi30RX/DTDXQKW+XoREnOHCoOAJFxwip/c1qaQAOqp1H6+P20ZGr2sIPiU97OVEU9kulm+E+jgiVW3LwGheOXsUOd1B8Mp0=","start_date_in_millis":-1}}'
