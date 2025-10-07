@@ -1,0 +1,40 @@
+---
+# Configure Fleet default output in Kibana to point to Elasticsearch
+- name: Configure Fleet default output in Kibana
+  uri:
+    url: "{{ kibana_address }}/api/fleet/outputs/fleet-default-output"
+    method: PUT
+    user: "{{ elk_user }}"
+    password: "{{ elk_password }}"
+    body_format: json
+    body:
+      name: "default"
+      type: "elasticsearch"
+      hosts: 
+        - "https://{{ hostvars[groups['BDA'][0]]['ansible_host'] }}:{{ (es_http_base_port | int) + (hostvars[groups['BDA'][0]].elasticsearch_nodes[0].port_offset | int) }}"
+      is_default: true
+      is_default_monitoring: true
+      ca_trusted_fingerprint: "{{ fleet_service_tokens[fleet_nodes[0].name].fingerprint }}"
+      config_yaml: |
+        ssl.verification_mode: none
+    headers:
+      Content-Type: application/json
+      kbn-xsrf: "true"
+    validate_certs: no
+    force_basic_auth: yes
+    status_code: [200, 201]
+    timeout: 30
+  register: fleet_output_config
+  run_once: true
+  delegate_to: "{{ groups['BDA'][0] }}"
+
+- name: Display Fleet output configuration result
+  debug:
+    msg: |
+      ✅ Fleet Default Output Configured
+      ===================================
+      - Elasticsearch Host: https://{{ hostvars[groups['BDA'][0]]['ansible_host'] }}:{{ (es_http_base_port | int) + (hostvars[groups['BDA'][0]].elasticsearch_nodes[0].port_offset | int) }}
+      - Status: {{ fleet_output_config.status }}
+      - Response: {{ fleet_output_config.json | default('Success') }}
+  run_once: true
+  delegate_to: "{{ groups['BDA'][0] }}"

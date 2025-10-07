@@ -22,27 +22,24 @@ services:
     environment:
       # Fleet Server Configuration
       - FLEET_SERVER_ENABLE=true
-      - FLEET_SERVER_ELASTICSEARCH_HOST={{ fleet_node.elasticsearch_host | default('https://' + hostvars[inventory_hostname].node_hostname + ':9200') }}
+      - FLEET_SERVER_ELASTICSEARCH_HOST={{ fleet_node.elasticsearch_host | default('https://' + hostvars[inventory_hostname].node_hostname + ':' + ((es_http_base_port | int) + (hostvars[inventory_hostname].elasticsearch_nodes[0].port_offset | int)) | string) }}
       - FLEET_SERVER_ELASTICSEARCH_CA=/opt/certs/elasticsearch-ca.crt
       - FLEET_SERVER_SERVICE_TOKEN={{ service_token }}
       - FLEET_SERVER_ELASTICSEARCH_CA_TRUSTED_FINGERPRINT={{ cert_fingerprint }}
       - FLEET_SERVER_POLICY_ID={{ fleet_node.policy_id | default(fleet_default_policy_id) }}
       - FLEET_INSECURE=true
       - FLEET_SERVER_PORT={{ fleet_node.port }}
-      - FLEET_ENROLE=1
+      - FLEET_ENROLL=1
       
-      # Additional Configuration
+      # Fleet Server binding
       - FLEET_SERVER_HOST=0.0.0.0
-      - FLEET_SERVER_CERT=/opt/certs/fleet-server.crt
-      - FLEET_SERVER_CERT_KEY=/opt/certs/fleet-server.key
+      
+      # Fleet URL
+      - FLEET_URL=https://{{ hostvars[inventory_hostname].ansible_host }}:{{ fleet_node.port }}
     
     volumes:
-      # Elasticsearch CA certificate
+      # Elasticsearch CA certificate (required)
       - {{ certs_base_path }}/ca/ca.crt:/opt/certs/elasticsearch-ca.crt:ro
-      
-      # Fleet server certificates (if needed)
-      # - {{ fleet_base_path }}/certs/fleet-server.crt:/opt/certs/fleet-server.crt:ro
-      # - {{ fleet_base_path }}/certs/fleet-server.key:/opt/certs/fleet-server.key:ro
     
     ports:
       - "{{ hostvars[inventory_hostname].ansible_host }}:{{ fleet_node.port }}:{{ fleet_node.port }}"
@@ -50,11 +47,11 @@ services:
     healthcheck:
       test: 
         - "CMD-SHELL"
-        - "curl -f http://127.0.0.1:{{ fleet_node.port }}/api/status || exit 1"
+        - "curl -f -k https://127.0.0.1:{{ fleet_node.port }}/api/status || exit 1"
       interval: 30s
       timeout: 10s
-      retries: 5
-      start_period: 60s
+      retries: 10
+      start_period: 120s
     
     deploy:
       resources:

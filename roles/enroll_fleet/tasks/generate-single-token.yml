@@ -1,0 +1,54 @@
+---
+# Generate service token for a single Fleet node
+- name: Delete existing service token for {{ fleet_node.name }} (if exists)
+  uri:
+    url: "https://{{ hostvars[inventory_hostname].node_hostname }}:{{ (es_http_base_port | default(9200) | int) + (hostvars[inventory_hostname].elasticsearch_nodes[0].port_offset | int) }}/_security/service/elastic/fleet-server/credential/token/{{ fleet_node.name }}-token"
+    method: DELETE
+    user: "{{ es_api_basic_auth_username | default('elastic') }}"
+    password: "{{ es_api_basic_auth_password }}"
+    force_basic_auth: yes
+    validate_certs: no
+    status_code: [200, 404]
+  ignore_errors: true
+  register: token_delete
+
+- name: Create new service token for {{ fleet_node.name }}
+  uri:
+    url: "https://{{ hostvars[inventory_hostname].node_hostname }}:{{ (es_http_base_port | default(9200) | int) + (hostvars[inventory_hostname].elasticsearch_nodes[0].port_offset | int) }}/_security/service/elastic/fleet-server/credential/token/{{ fleet_node.name }}-token"
+    method: POST
+    user: "{{ es_api_basic_auth_username | default('elastic') }}"
+    password: "{{ es_api_basic_auth_password }}"
+    force_basic_auth: yes
+    validate_certs: no
+    status_code: [200, 201]
+    timeout: 30
+  register: token_creation
+  retries: 3
+  delay: 10
+
+- name: Extract service token for {{ fleet_node.name }}
+  set_fact:
+    current_service_token: "{{ token_creation.json.token.value }}"
+  when: token_creation.json.token.value is defined
+
+- name: Get certificate fingerprint from Elasticsearch CA
+  shell: |
+    openssl x509 -fingerprint -sha256 -noout -in {{ certs_base_path }}/ca/ca.crt | cut -d'=' -f2 | tr -d ':' | tr '[:upper:]' '[:lower:]'
+  register: cert_fingerprint_result
+  changed_when: false
+
+- name: Set certificate fingerprint
+  set_fact:
+    current_cert_fingerprint: "{{ cert_fingerprint_result.stdout }}"
+
+- name: Store token and fingerprint in dictionary for {{ fleet_node.name }}
+  set_fact:
+    fleet_service_tokens: "{{ fleet_service_tokens | combine({fleet_node.name: {'token': current_service_token, 'fingerprint': current_cert_fingerprint}}) }}"
+
+- name: Display token generation status for {{ fleet_node.name }}
+  debug:
+    msg: |
+      ✅ Service Token Generated for {{ fleet_node.name }}
+      ====================================================
+      - Token: {{ current_service_token[:20] }}...
+      - Fingerprint: {{ current_cert_fingerprint }}

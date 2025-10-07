@@ -29,12 +29,22 @@
       include_tasks: generate-service-tokens.yml
       when: has_fleet_nodes
 
-    # Register Fleet servers in Kibana (run_once and delegate_to are inside the task file)
+    # Create Fleet Server Policy (NEW - ADD THIS BEFORE register-fleet-servers)
+    - name: Create Fleet Server Policy in Kibana
+      include_tasks: create-fleet-policy.yml
+      when: has_fleet_nodes
+
+    # Register Fleet servers in Kibana
     - name: Register Fleet servers in Kibana
       include_tasks: register-fleet-servers.yml
       when: has_fleet_nodes
 
-    # Configure agent binary download source (run_once is inside the task file)
+    # Configure Fleet default output in Kibana
+    - name: Configure Fleet default output in Kibana
+      include_tasks: configure-fleet-output.yml
+      when: has_fleet_nodes
+
+    # Configure agent binary download source
     - name: Configure agent binary download source
       include_tasks: configure-agent-binary.yml
       when: "'BDA' in group_names"
@@ -62,19 +72,7 @@
           4. Check Elasticsearch connectivity: curl -k https://{{ hostvars[inventory_hostname].node_hostname }}:9200
           5. Check service tokens: cat /etc/elasticsearch/service_tokens
           6. Check system resources: free -h && df -h {{ fleet_base_path }}
-          
-          Common Issues:
-          - Elasticsearch not accessible: Ensure ES is running and accessible
-          - Service token generation failed: Check ES service is running
-          - Kibana not accessible: Verify Kibana is up and credentials are correct
-          - Docker network issues: Ensure docker network {{ docker_network_name }} exists
-          
-          Debug Commands:
-          - List containers: docker ps -a
-          - Check network: docker network inspect {{ docker_network_name }}
-          - Test ES: curl -k -u elastic:password https://localhost:9200
-          - Test Kibana: curl -k https://localhost:5601/api/status
 
   when: 
-    - has_fleet_nodes or 'COLLECTOR' in group_names
+    - hostvars[inventory_hostname].fleet_nodes is defined or 'COLLECTOR' in group_names
   tags: [cluster, simple, fleet, enroll_fleet]

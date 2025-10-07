@@ -1,0 +1,135 @@
+---
+# Create Fleet Server policy in Kibana
+- name: Check if fleet-server-policy already exists
+  uri:
+    url: "{{ kibana_address }}/api/fleet/agent_policies/fleet-server-policy"
+    method: GET
+    user: "{{ elk_user }}"
+    password: "{{ elk_password }}"
+    validate_certs: no
+    force_basic_auth: yes
+    status_code: [200, 404]
+    headers:
+      kbn-xsrf: "true"
+  register: fleet_policy_check
+  run_once: true
+  delegate_to: "{{ groups['BDA'][0] }}"
+  ignore_errors: true
+
+- name: Create fleet-server-policy if it doesn't exist
+  uri:
+    url: "{{ kibana_address }}/api/fleet/agent_policies"
+    method: POST
+    user: "{{ elk_user }}"
+    password: "{{ elk_password }}"
+    body_format: json
+    body:
+      id: "fleet-server-policy"
+      name: "Fleet Server Policy"
+      description: "Policy for Fleet Server agents"
+      namespace: "default"
+      monitoring_enabled:
+        - "logs"
+        - "metrics"
+      is_protected: false
+    headers:
+      Content-Type: application/json
+      kbn-xsrf: "true"
+    validate_certs: no
+    force_basic_auth: yes
+    status_code: [200, 201]
+    timeout: 30
+  register: fleet_policy_creation
+  when: fleet_policy_check.status == 404
+  run_once: true
+  delegate_to: "{{ groups['BDA'][0] }}"
+
+- name: Wait for policy to be available
+  pause:
+    seconds: 5
+  when: fleet_policy_check.status == 404
+
+- name: Get Fleet Server package info
+  uri:
+    url: "{{ kibana_address }}/api/fleet/epm/packages/fleet_server"
+    method: GET
+    user: "{{ elk_user }}"
+    password: "{{ elk_password }}"
+    validate_certs: no
+    force_basic_auth: yes
+    status_code: [200]
+    headers:
+      kbn-xsrf: "true"
+  register: fleet_server_package
+  run_once: true
+  delegate_to: "{{ groups['BDA'][0] }}"
+
+- name: Set Fleet Server package version
+  set_fact:
+    fleet_server_version: "{{ fleet_server_package.json.item.version }}"
+  run_once: true
+  delegate_to: "{{ groups['BDA'][0] }}"
+
+- name: Add Fleet Server integration to policy
+  uri:
+    url: "{{ kibana_address }}/api/fleet/package_policies"
+    method: POST
+    user: "{{ elk_user }}"
+    password: "{{ elk_password }}"
+    body_format: json
+    body:
+      name: "fleet_server-1"
+      description: "Fleet Server integration"
+      namespace: "default"
+      policy_id: "fleet-server-policy"
+      enabled: true
+      package:
+        name: "fleet_server"
+        version: "{{ fleet_server_version }}"
+      inputs:
+        - type: "fleet-server"
+          enabled: true
+          streams: []
+          vars:
+            host:
+              value: "0.0.0.0"
+              type: "text"
+            port:
+              value: 8220
+              type: "integer"
+            max_agents:
+              value: 10000
+              type: "integer"
+            max_connections:
+              value: 0
+              type: "integer"
+          compiled_input:
+            server:
+              host: "0.0.0.0"
+              port: 8220
+    headers:
+      Content-Type: application/json
+      kbn-xsrf: "true"
+    validate_certs: no
+    force_basic_auth: yes
+    status_code: [200, 201, 409]
+    timeout: 30
+  register: fleet_integration
+  run_once: true
+  delegate_to: "{{ groups['BDA'][0] }}"
+
+- name: Display Fleet policy creation result
+  debug:
+    msg: |
+      ✅ Fleet Server Policy Configured
+      ==================================
+      {% if fleet_policy_check.status == 200 %}
+      - Status: Policy already exists
+      {% elif fleet_policy_creation.status is defined %}
+      - Status: Policy created successfully
+      - Policy ID: fleet-server-policy
+      - Package Version: {{ fleet_server_version }}
+      - Integration: {{ 'Added' if fleet_integration.status in [200, 201] else 'Already exists' if fleet_integration.status == 409 else 'Check logs' }}
+      {% endif %}
+  run_once: true
+  delegate_to: "{{ groups['BDA'][0] }}"

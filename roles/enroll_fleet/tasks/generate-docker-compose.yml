@@ -1,0 +1,38 @@
+---
+# Generate Docker Compose configurations for each Fleet node
+- name: Generate Docker Compose file for {{ fleet_node.name }}
+  template:
+    src: docker-compose-fleet.yml.j2
+    dest: "{{ fleet_base_path }}/{{ fleet_node.name }}/docker-compose.yml"
+    owner: root
+    group: root
+    mode: "0644"
+    backup: yes
+  vars:
+    service_token: "{{ fleet_service_tokens[fleet_node.name].token }}"
+    cert_fingerprint: "{{ fleet_service_tokens[fleet_node.name].fingerprint }}"
+  loop: "{{ fleet_nodes }}"
+  loop_control:
+    loop_var: fleet_node
+    label: "{{ fleet_node.name }}"
+  register: compose_generation
+
+- name: Validate Docker Compose files
+  shell: |
+    cd {{ fleet_base_path }}/{{ fleet_node.name }}
+    docker-compose config > /dev/null
+  loop: "{{ fleet_nodes }}"
+  loop_control:
+    loop_var: fleet_node
+    label: "{{ fleet_node.name }}"
+  register: compose_validation
+  changed_when: false
+
+- name: Display Docker Compose generation status
+  debug:
+    msg: |
+      ✅ Docker Compose Files Generated
+      ==================================
+      {% for node in fleet_nodes %}
+      - {{ node.name }}: {{ fleet_base_path }}/{{ node.name }}/docker-compose.yml
+      {% endfor %}
